@@ -18,3 +18,7 @@ models/*
 
 .env
 .env.*
+
+auth-google.json
+vercel-env-variables.txt
+vercel-env.json

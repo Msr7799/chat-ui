@@ -28,6 +28,7 @@
 	import { usePublicConfig } from "$lib/utils/PublicConfig.svelte";
 	import { useAPIClient, handleResponse } from "$lib/APIClient";
 	import { requireAuthUser } from "$lib/utils/auth";
+	import UserMenu from "./UserMenu.svelte";
 
 	const publicConfig = usePublicConfig();
 	const client = useAPIClient();
@@ -92,7 +93,7 @@
 				},
 			})
 			.then(handleResponse)
-			.then((r) => r.conversations)
+			.then((r: { conversations: ConvSidebar[] }) => r.conversations)
 			.catch((): ConvSidebar[] => []);
 
 		if (newConvs.length === 0) {
@@ -134,14 +135,17 @@
 		<Logo classNames="dark:invert mr-[2px]" />
 		{publicConfig.PUBLIC_APP_NAME}
 	</a>
-	<a
-		href={`${base}/`}
-		onclick={handleNewChatClick}
-		class="flex rounded-lg border bg-white px-2 py-0.5 text-center shadow-sm hover:shadow-none dark:border-gray-600 dark:bg-gray-700 sm:text-smd"
-		title="Ctrl/Cmd + Shift + O"
-	>
-		New Chat
-	</a>
+	<div class="flex items-center gap-2">
+		<a
+			href={`${base}/`}
+			onclick={handleNewChatClick}
+			class="flex rounded-lg border bg-white px-2 py-0.5 text-center shadow-sm hover:shadow-none dark:border-gray-600 dark:bg-gray-700 sm:text-smd"
+			title="Ctrl/Cmd + Shift + O"
+		>
+			New Chat
+		</a>
+		<UserMenu {user} />
+	</div>
 </div>
 
 <div
@@ -192,6 +196,14 @@
 			class="ml-auto rounded-md bg-gray-500/5 px-1.5 py-0.5 text-xs text-gray-400 dark:bg-gray-500/20 dark:text-gray-400"
 			>{nModels}</span
 		>
+	</a>
+
+	<a
+		href="{base}/gallery"
+		class="flex h-9 flex-none items-center gap-1.5 rounded-lg pl-2.5 pr-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+		onclick={handleNavItemClick}
+	>
+		Gallery
 	</a>
 
 	<span class="flex gap-1">

@@ -17,6 +17,7 @@ import { logger } from "$lib/server/logger";
 import { building } from "$app/environment";
 import type { TokenCache } from "$lib/types/TokenCache";
 import { onExit } from "./exitHandler";
+import type { GeneratedImage } from "$lib/types/GeneratedImage";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { existsSync, mkdirSync } from "fs";
@@ -133,6 +134,7 @@ export class Database {
 		const tokenCaches = db.collection<TokenCache>("tokens");
 		const tools = db.collection("tools");
 		const configCollection = db.collection<ConfigKey>("config");
+		const generatedImages = db.collection<GeneratedImage>("generatedImages");
 
 		return {
 			conversations,
@@ -152,6 +154,7 @@ export class Database {
 			tokenCaches,
 			tools,
 			config: configCollection,
+			generatedImages,
 		};
 	}
 
@@ -175,6 +178,7 @@ export class Database {
 			semaphores,
 			tokenCaches,
 			config,
+			generatedImages,
 		} = this.getCollections();
 
 		conversations
@@ -288,6 +292,12 @@ export class Database {
 			.catch((e) => logger.error(e));
 
 		config.createIndex({ key: 1 }, { unique: true }).catch((e) => logger.error(e));
+
+		// Generated images indexes
+		generatedImages.createIndex({ userId: 1, createdAt: -1 }).catch((e) => logger.error(e));
+		generatedImages
+			.createIndex({ cloudinaryPublicId: 1 }, { unique: true })
+			.catch((e) => logger.error(e));
 	}
 }
 

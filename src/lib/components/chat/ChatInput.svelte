@@ -12,6 +12,7 @@
 	import CarbonChevronRight from "~icons/carbon/chevron-right";
 	import UrlFetchModal from "./UrlFetchModal.svelte";
 	import { TEXT_MIME_ALLOWLIST, IMAGE_MIME_ALLOWLIST_DEFAULT } from "$lib/constants/mime";
+	import ImageGenerationButton from "./ImageGenerationButton.svelte";
 
 	import { isVirtualKeyboard } from "$lib/utils/isVirtualKeyboard";
 	import { requireAuthUser } from "$lib/utils/auth";
@@ -216,6 +217,7 @@
 				"scrollbar-custom -ml-0.5 flex max-w-[calc(100%-40px)] flex-wrap items-center justify-start gap-2.5 px-3 pb-2.5 pt-1.5 text-gray-500 dark:text-gray-400 max-md:flex-nowrap max-md:overflow-x-auto sm:gap-2",
 			]}
 		>
+			<ImageGenerationButton />
 			{#if showFileUpload}
 				<div class="flex items-center">
 					<input
