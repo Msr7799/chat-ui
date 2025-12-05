@@ -36,8 +36,8 @@ export const imageGroup = new Elysia().group("/images", (app) =>
 				}
 
 				logger.info(
-					{ model: FLUX_MODEL_ID, tokenUsed: apiToken.substring(0, 7) + "..." },
-					"Generating image with FLUX using HuggingFace Inference SDK"
+					{ model: FLUX_MODEL_ID },
+					"Generating image with FLUX"
 				);
 
 				// ✅ استخدام @huggingface/inference SDK
@@ -78,15 +78,9 @@ export const imageGroup = new Elysia().group("/images", (app) =>
 						updatedAt: new Date(),
 					});
 
-					logger.info(
-						{ imageId: generatedImage.insertedId, userId: locals.user._id },
-						"Image generated and saved to MongoDB"
-					);
+					logger.info("Image generated and saved to MongoDB");
 				} else {
-					logger.info(
-						{ prompt: prompt.trim() },
-						"Image generated for anonymous user (not saved to MongoDB)"
-					);
+					logger.info("Image generated for anonymous user");
 				}
 
 				return {
@@ -178,7 +172,7 @@ export const imageGroup = new Elysia().group("/images", (app) =>
 					_id: new ObjectId(imageId),
 				});
 
-				logger.info({ imageId, userId: locals.user._id }, "Image deleted successfully");
+				logger.info("Image deleted successfully");
 
 				return { success: true };
 			} catch (error) {

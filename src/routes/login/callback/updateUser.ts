@@ -84,15 +84,8 @@ export async function updateUser(params: {
 	// Dynamically access user data based on NAME_CLAIM from environment
 	// This approach allows us to adapt to different OIDC providers flexibly.
 
-	logger.info(
-		{
-			login_username: username,
-			login_name: name,
-			login_email: email,
-			login_orgs: orgs?.map((el) => el.sub),
-		},
-		"user login"
-	);
+	// ✅ Production: لا نطبع بيانات المستخدم الحساسة في logs
+	logger.info("user login successful");
 	// if using huggingface as auth provider, check orgs for earl access and amin rights
 	const isAdmin =
 		(config.HF_ORG_ADMIN && orgs?.some((org) => org.sub === config.HF_ORG_ADMIN)) || false;
@@ -100,21 +93,14 @@ export async function updateUser(params: {
 		(config.HF_ORG_EARLY_ACCESS && orgs?.some((org) => org.sub === config.HF_ORG_EARLY_ACCESS)) ||
 		false;
 
-	console.log("🔵 Google OAuth User Data:", {
-		username,
-		name,
-		email,
-		avatarUrl,
-		hfUserId,
-	});
+	// ✅ Removed sensitive user data logging for production
 
 	logger.debug(
 		{
 			isAdmin,
 			isEarlyAccess,
-			hfUserId,
 		},
-		`Updating user ${hfUserId}`
+		"Updating user"
 	);
 
 	// check if user already exists
