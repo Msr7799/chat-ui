@@ -86,6 +86,12 @@ export async function updateUser(params: {
 
 	// ✅ Production: لا نطبع بيانات المستخدم الحساسة في logs
 	logger.info("user login successful");
+	
+	// 🔍 Check if avatarUrl is provided
+	if (!avatarUrl) {
+		logger.warn("No avatarUrl (picture) received from OAuth provider - using fallback");
+	}
+	
 	// if using huggingface as auth provider, check orgs for earl access and amin rights
 	const isAdmin =
 		(config.HF_ORG_ADMIN && orgs?.some((org) => org.sub === config.HF_ORG_ADMIN)) || false;
@@ -126,14 +132,16 @@ export async function updateUser(params: {
 
 	if (existingUser) {
 		// update existing user if any
+		// ✅ Force update avatarUrl even if it exists (to get latest Google photo)
 		await collections.users.updateOne(
 			{ _id: existingUser._id },
 			{ $set: { 
 				username: username || email?.split('@')[0] || name, 
 				name, 
-				avatarUrl, 
+				avatarUrl: avatarUrl || existingUser.avatarUrl, // Keep old if new one is empty
 				isAdmin, 
-				isEarlyAccess 
+				isEarlyAccess,
+				lastLoginAt: new Date() // ✅ Track Login Time
 			} }
 		);
 
@@ -164,6 +172,7 @@ export async function updateUser(params: {
 			hfUserId,
 			isAdmin,
 			isEarlyAccess,
+			lastLoginAt: new Date(), // ✅ Track Login Time for New Users
 		});
 
 		userId = insertedId;

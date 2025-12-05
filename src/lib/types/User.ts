@@ -11,4 +11,9 @@ export interface User extends Timestamps {
 	hfUserId: string;
 	isAdmin?: boolean;
 	isEarlyAccess?: boolean;
+	
+	// Session tracking
+	lastLoginAt?: Date;
+	lastLogoutAt?: Date;
+	onlineDuration?: number; // in milliseconds
 }

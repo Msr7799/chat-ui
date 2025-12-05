@@ -11,6 +11,14 @@
 
 	let { user }: Props = $props();
 
+	$effect(() => {
+		if (user?.avatarUrl) {
+			console.log("🖼️ Frontend User Avatar:", user.avatarUrl);
+		} else {
+			console.log("⚠️ Frontend User has NO Avatar URL");
+		}
+	});
+
 	let isMenuOpen = $state(false);
 
 	function toggleMenu() {
@@ -27,10 +35,8 @@
 	}
 
 	async function handleLogout() {
-		console.log("🔴 Logout button clicked!");
 		try {
 			const logoutUrl = resolve("/api/v2/logout");
-			console.log("🔴 Sending logout request to:", logoutUrl);
 			const response = await fetch(logoutUrl, {
 				method: "POST",
 				headers: {
@@ -38,20 +44,12 @@
 				},
 			});
 			
-			console.log("🔴 Logout response status:", response.status);
-			console.log("🔴 Logout response ok:", response.ok);
-			
 			if (response.ok) {
-				const result = await response.json();
-				console.log("🔴 Logout result:", result);
 				// Successful logout
 				window.location.href = resolve("/");
-			} else {
-				const errorText = await response.text();
-				console.error("🔴 Logout failed:", errorText);
 			}
 		} catch (error) {
-			console.error("🔴 Logout failed:", error);
+			console.error("Logout failed:", error);
 		}
 	}
 
@@ -71,6 +69,25 @@
 			};
 		}
 	});
+	function formatDuration(ms: number | undefined) {
+		if (!ms) return "0m";
+		const minutes = Math.floor(ms / 60000);
+		const hours = Math.floor(minutes / 60);
+		const remainingMinutes = minutes % 60;
+		
+		if (hours > 0) {
+			return `${hours}h ${remainingMinutes}m`;
+		}
+		return `${remainingMinutes}m`;
+	}
+
+	// Calculate current online duration if user is logged in
+	let currentDuration = $derived(
+		// @ts-ignore - lastLoginAt and onlineDuration are added dynamically
+		((user?.onlineDuration || 0) as number) + 
+		// @ts-ignore
+		(user?.lastLoginAt ? new Date().getTime() - new Date(user.lastLoginAt).getTime() : 0)
+	);
 </script>
 
 <div class="user-menu-container relative">
@@ -78,15 +95,30 @@
 		<!-- User Avatar Button -->
 		<button
 			onclick={toggleMenu}
-			class="flex size-9 items-center justify-center rounded-full border-2 border-gray-300 bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-md transition-all duration-200 hover:scale-105 hover:shadow-lg dark:border-gray-600"
+			class="flex size-9 items-center justify-center rounded-full border-2 border-gray-300 bg-white shadow-md transition-all duration-200 hover:scale-105 hover:shadow-lg dark:border-gray-600 dark:bg-gray-700"
 			aria-label="User menu"
 			title={user.username || user.email}
 		>
-			<img
-				src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.username || user.email || 'U')}&background=6366f1&color=fff&size=128`}
-				class="size-full rounded-full object-cover"
-				alt={user.username || user.email}
-			/>
+			{#if user.avatarUrl}
+				<img
+					src={user.avatarUrl}
+					referrerpolicy="no-referrer"
+					class="size-full rounded-full object-cover"
+					alt={user.username || user.email}
+					onerror={(e) => {
+						console.error("❌ Failed to load Google Avatar:", user.avatarUrl);
+						// Fallback if Google image fails
+						const target = e.currentTarget as HTMLImageElement;
+						target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username || user.email || 'U')}&background=6366f1&color=fff&size=128`;
+					}}
+				/>
+			{:else}
+				<img
+					src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.username || user.email || 'U')}&background=6366f1&color=fff&size=128`}
+					class="size-full rounded-full object-cover"
+					alt={user.username || user.email}
+				/>
+			{/if}
 		</button>
 	{:else}
 		<!-- Login Button -->
@@ -108,11 +140,24 @@
 			<!-- User Info Section -->
 			<div class="border-b border-gray-200 p-4 dark:border-gray-700">
 				<div class="flex items-center gap-3">
-					<img
-						src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.username || user.email || 'U')}&background=6366f1&color=fff&size=128`}
-						class="size-12 rounded-full object-cover"
-						alt={user.username || user.email}
-					/>
+					{#if user.avatarUrl}
+						<img
+							src={user.avatarUrl}
+							referrerpolicy="no-referrer"
+							class="size-12 rounded-full object-cover"
+							alt={user.username || user.email}
+							onerror={(e) => {
+								const target = e.currentTarget as HTMLImageElement;
+								target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username || user.email || 'U')}&background=6366f1&color=fff&size=128`;
+							}}
+						/>
+					{:else}
+						<img
+							src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.username || user.email || 'U')}&background=6366f1&color=fff&size=128`}
+							class="size-12 rounded-full object-cover"
+							alt={user.username || user.email}
+						/>
+					{/if}
 					<div class="flex-1 overflow-hidden">
 						{#if user.username}
 							<p class="truncate font-medium text-gray-900 dark:text-gray-100">
@@ -122,6 +167,11 @@
 						{#if user.email}
 							<p class="truncate text-sm text-gray-500 dark:text-gray-400">
 								{user.email}
+							</p>
+						{/if}
+						{#if currentDuration}
+							<p class="mt-1 truncate text-xs text-gray-400 dark:text-gray-500">
+								Online: {formatDuration(currentDuration)}
 							</p>
 						{/if}
 					</div>
