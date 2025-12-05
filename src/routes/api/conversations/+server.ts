@@ -32,9 +32,9 @@ export async function GET({ locals, url }) {
 			modelId: conv.model, // legacy param iOS
 		}));
 		return Response.json(res);
-	} else {
-		return Response.json({ message: "Must have session cookie" }, { status: 401 });
 	}
+	// ✅ Anonymous mode: إرجاع empty array بدلاً من 401
+	return Response.json([]);
 }
 
 export async function DELETE({ locals }) {

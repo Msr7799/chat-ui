@@ -22,7 +22,7 @@
 	import IconShare from "$lib/components/icons/IconShare.svelte";
 	import { shareModal } from "$lib/stores/shareModal";
 	import BackgroundGenerationPoller from "$lib/components/BackgroundGenerationPoller.svelte";
-	import { requireAuthUser } from "$lib/utils/auth";
+	import { removeBackgroundGeneration } from "$lib/stores/backgroundGenerations";
 
 	let { data = $bindable(), children } = $props();
 
@@ -96,7 +96,7 @@
 	}
 
 	function closeWelcomeModal() {
-		if (requireAuthUser()) return;
+		// ✅ السماح بإغلاق Welcome Modal بدون login (anonymous mode)
 		settings.set({ welcomeModalSeen: true });
 	}
 
@@ -159,7 +159,7 @@
 			if (oPressed && e.shiftKey && metaOrCtrl) {
 				e.preventDefault();
 				isAborted.set(true);
-				if (requireAuthUser()) return;
+				// ✅ السماح بـ keyboard shortcut بدون login
 				goto(`${base}/`, { invalidateAll: true });
 			}
 		};

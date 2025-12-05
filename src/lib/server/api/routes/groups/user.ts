@@ -9,17 +9,33 @@ import { z } from "zod";
 
 export const userGroup = new Elysia()
 	.use(authPlugin)
-	.get("/login", () => {
-		// todo: login
-		throw new Error("Not implemented");
-	})
-	.get("/login/callback", () => {
-		// todo: login callback
-		throw new Error("Not implemented");
-	})
-	.post("/logout", () => {
-		// todo: logout
-		throw new Error("Not implemented");
+	// Note: /login and /login/callback are handled by SvelteKit routes in src/routes/login/
+	// These API endpoints are not needed for OAuth flow
+	.post("/logout", async ({ cookie, locals }) => {
+		try {
+			// Delete session from database if user is logged in
+			if (locals.sessionId) {
+				await collections.sessions.deleteOne({ sessionId: locals.sessionId });
+			}
+			
+			// Clear session cookie
+			const cookieName = "hf-chat"; // This should match COOKIE_NAME from config
+			if (cookie[cookieName]) {
+				cookie[cookieName].set({
+					value: "",
+					httpOnly: true,
+					secure: true,
+					sameSite: "lax",
+					expires: new Date(0), // Expire immediately
+					path: "/"
+				});
+			}
+			
+			return { success: true, message: "Logged out successfully" };
+		} catch (error) {
+			console.error("Logout error:", error);
+			return { success: false, message: "Logout failed" };
+		}
 	})
 	.group("/user", (app) => {
 		return app

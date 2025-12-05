@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { base } from "$app/paths";
+	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { goto } from "$app/navigation";
 	import IconUser from "./icons/IconUser.svelte";
@@ -23,17 +23,35 @@
 
 	function handleLogin() {
 		const currentPath = page.url.pathname + page.url.search;
-		window.location.href = `${base}/login?next=${encodeURIComponent(currentPath)}`;
+		window.location.href = resolve("/login") + `?next=${encodeURIComponent(currentPath)}`;
 	}
 
 	async function handleLogout() {
+		console.log("🔴 Logout button clicked!");
 		try {
-			await fetch(`${base}/logout`, {
+			const logoutUrl = resolve("/api/v2/logout");
+			console.log("🔴 Sending logout request to:", logoutUrl);
+			const response = await fetch(logoutUrl, {
 				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
 			});
-			window.location.href = base || "/";
+			
+			console.log("🔴 Logout response status:", response.status);
+			console.log("🔴 Logout response ok:", response.ok);
+			
+			if (response.ok) {
+				const result = await response.json();
+				console.log("🔴 Logout result:", result);
+				// Successful logout
+				window.location.href = resolve("/");
+			} else {
+				const errorText = await response.text();
+				console.error("🔴 Logout failed:", errorText);
+			}
 		} catch (error) {
-			console.error("Logout failed:", error);
+			console.error("🔴 Logout failed:", error);
 		}
 	}
 
@@ -64,21 +82,11 @@
 			aria-label="User menu"
 			title={user.username || user.email}
 		>
-			{#if user.username}
-				<img
-					src="https://huggingface.co/api/users/{user.username}/avatar?redirect=true"
-					class="size-full rounded-full object-cover"
-					alt={user.username}
-					onerror={(e) => {
-						const target = e.currentTarget as HTMLImageElement;
-						target.style.display = 'none';
-					}}
-				/>
-			{:else}
-				<span class="text-sm font-semibold">
-					{(user.email?.[0] || 'U').toUpperCase()}
-				</span>
-			{/if}
+			<img
+				src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.username || user.email || 'U')}&background=6366f1&color=fff&size=128`}
+				class="size-full rounded-full object-cover"
+				alt={user.username || user.email}
+			/>
 		</button>
 	{:else}
 		<!-- Login Button -->
@@ -100,25 +108,11 @@
 			<!-- User Info Section -->
 			<div class="border-b border-gray-200 p-4 dark:border-gray-700">
 				<div class="flex items-center gap-3">
-					<div
-						class="flex size-12 items-center justify-center rounded-full border-2 border-gray-300 bg-gradient-to-br from-blue-500 to-purple-600 text-white dark:border-gray-600"
-					>
-						{#if user.username}
-							<img
-								src="https://huggingface.co/api/users/{user.username}/avatar?redirect=true"
-								class="size-full rounded-full object-cover"
-								alt={user.username}
-								onerror={(e) => {
-									const target = e.currentTarget as HTMLImageElement;
-									target.style.display = 'none';
-								}}
-							/>
-						{:else}
-							<span class="text-lg font-semibold">
-								{(user.email?.[0] || 'U').toUpperCase()}
-							</span>
-						{/if}
-					</div>
+					<img
+						src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.username || user.email || 'U')}&background=6366f1&color=fff&size=128`}
+						class="size-12 rounded-full object-cover"
+						alt={user.username || user.email}
+					/>
 					<div class="flex-1 overflow-hidden">
 						{#if user.username}
 							<p class="truncate font-medium text-gray-900 dark:text-gray-100">
@@ -137,7 +131,7 @@
 			<!-- Menu Items -->
 			<div class="p-2">
 				<a
-					href="{base}/settings/application"
+					href={resolve("/settings/application")}
 					onclick={closeMenu}
 					class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
 				>
@@ -165,7 +159,7 @@
 				</a>
 
 				<a
-					href="{base}/gallery"
+					href={resolve("/gallery")}
 					onclick={closeMenu}
 					class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
 				>

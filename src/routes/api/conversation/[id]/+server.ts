@@ -31,10 +31,9 @@ export async function GET({ locals, params }) {
 				})),
 			};
 			return Response.json(res);
-		} else {
-			return Response.json({ message: "Conversation not found" }, { status: 404 });
 		}
-	} else {
-		return Response.json({ message: "Must have session cookie" }, { status: 401 });
+		return Response.json({ message: "Conversation not found" }, { status: 404 });
 	}
+	// ✅ Anonymous mode: إرجاع 404 بدلاً من 401
+	return Response.json({ message: "Conversation not found" }, { status: 404 });
 }

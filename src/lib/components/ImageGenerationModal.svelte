@@ -28,8 +28,8 @@
 		generatedImageUrl = null;
 
 		try {
-			const response = await client.images
-				.generate()
+			// ✅ استدعاء API الصحيح - بدون () بعد generate
+			const response = await client.images.generate
 				.post({ prompt: prompt.trim() })
 				.then(handleResponse);
 

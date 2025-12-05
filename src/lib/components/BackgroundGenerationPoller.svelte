@@ -117,6 +117,20 @@
 
 				failureCounts.delete(id);
 			} catch (err) {
+				// إذا كانت المحادثة محذوفة (404/500) أو غير موجودة، أزل الـ polling فوراً
+				const error = err as { status?: number; value?: string };
+				const isNotFound = error?.status === 404 || error?.status === 500;
+				
+				if (isNotFound) {
+					// محادثة محذوفة، أزل الـ background generation فوراً
+					removeBackgroundGeneration(id);
+					assistantSnapshots.delete(id);
+					failureCounts.delete(id);
+					stopPoller(id, "conversation not found");
+					await invalidate(UrlDependency.ConversationList);
+					return;
+				}
+				
 				console.error("Background generation poll failed", id, err);
 				const failures = (failureCounts.get(id) ?? 0) + 1;
 				failureCounts.set(id, failures);

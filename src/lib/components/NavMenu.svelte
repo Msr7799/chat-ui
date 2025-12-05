@@ -8,7 +8,7 @@
 </script>
 
 <script lang="ts">
-	import { base } from "$app/paths";
+	import { resolve } from "$app/paths";
 
 	import Logo from "$lib/components/icons/Logo.svelte";
 	import IconSun from "$lib/components/icons/IconSun.svelte";
@@ -130,14 +130,14 @@
 >
 	<a
 		class="flex select-none items-center rounded-xl text-lg font-semibold"
-		href="{publicConfig.PUBLIC_ORIGIN}{base}/"
+		href="{publicConfig.PUBLIC_ORIGIN}{resolve('/')}"
 	>
 		<Logo classNames="dark:invert mr-[2px]" />
 		{publicConfig.PUBLIC_APP_NAME}
 	</a>
 	<div class="flex items-center gap-2">
 		<a
-			href={`${base}/`}
+			href={resolve("/")}
 			onclick={handleNewChatClick}
 			class="flex rounded-lg border bg-white px-2 py-0.5 text-center shadow-sm hover:shadow-none dark:border-gray-600 dark:bg-gray-700 sm:text-smd"
 			title="Ctrl/Cmd + Shift + O"
@@ -180,14 +180,14 @@
 			>
 
 			<img
-				src="https://huggingface.co/api/users/{user.username}/avatar?redirect=true"
+				src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.username || user.email || 'U')}&background=6366f1&color=fff&size=32`}
 				class="ml-auto size-4 rounded-full border bg-gray-500 dark:border-white/40"
 				alt=""
 			/>
 		</div>
 	{/if}
 	<a
-		href="{base}/models"
+		href={resolve("/models")}
 		class="flex h-9 flex-none items-center gap-1.5 rounded-lg pl-2.5 pr-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
 		onclick={handleNavItemClick}
 	>
@@ -199,7 +199,7 @@
 	</a>
 
 	<a
-		href="{base}/gallery"
+		href={resolve("/gallery")}
 		class="flex h-9 flex-none items-center gap-1.5 rounded-lg pl-2.5 pr-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
 		onclick={handleNavItemClick}
 	>
@@ -208,7 +208,7 @@
 
 	<span class="flex gap-1">
 		<a
-			href="{base}/settings/application"
+			href={resolve("/settings/application")}
 			class="flex h-9 flex-none flex-grow items-center gap-1.5 rounded-lg pl-2.5 pr-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
 			onclick={handleNavItemClick}
 		>

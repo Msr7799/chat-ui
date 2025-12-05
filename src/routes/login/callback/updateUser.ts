@@ -100,6 +100,14 @@ export async function updateUser(params: {
 		(config.HF_ORG_EARLY_ACCESS && orgs?.some((org) => org.sub === config.HF_ORG_EARLY_ACCESS)) ||
 		false;
 
+	console.log("🔵 Google OAuth User Data:", {
+		username,
+		name,
+		email,
+		avatarUrl,
+		hfUserId,
+	});
+
 	logger.debug(
 		{
 			isAdmin,
@@ -134,7 +142,13 @@ export async function updateUser(params: {
 		// update existing user if any
 		await collections.users.updateOne(
 			{ _id: existingUser._id },
-			{ $set: { username, name, avatarUrl, isAdmin, isEarlyAccess } }
+			{ $set: { 
+				username: username || email?.split('@')[0] || name, 
+				name, 
+				avatarUrl, 
+				isAdmin, 
+				isEarlyAccess 
+			} }
 		);
 
 		// remove previous session if it exists and add new one
@@ -157,7 +171,7 @@ export async function updateUser(params: {
 			_id: new ObjectId(),
 			createdAt: new Date(),
 			updatedAt: new Date(),
-			username,
+			username: username || email?.split('@')[0] || name,
 			name,
 			email,
 			avatarUrl,

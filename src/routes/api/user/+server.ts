@@ -11,5 +11,7 @@ export async function GET({ locals }) {
 
 		return Response.json(res);
 	}
-	return Response.json({ message: "Must be signed in" }, { status: 401 });
+	// ✅ Anonymous mode: إرجاع null بدلاً من 401
+	// هذا يسمح بـ anonymous usage بدون errors
+	return Response.json(null);
 }

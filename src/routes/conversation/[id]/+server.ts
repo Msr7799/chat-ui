@@ -29,12 +29,8 @@ export async function POST({ request, locals, params, getClientAddress }) {
 	const convId = new ObjectId(id);
 	const promptedAt = new Date();
 
+	// Allow anonymous users - use sessionId if no user is logged in
 	const userId = locals.user?._id ?? locals.sessionId;
-
-	// check user
-	if (!userId) {
-		error(401, "Unauthorized");
-	}
 
 	// check if the user has access to the conversation
 	const convBeforeCheck = await collections.conversations.findOne({

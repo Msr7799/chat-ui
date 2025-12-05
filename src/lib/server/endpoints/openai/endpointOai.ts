@@ -149,7 +149,10 @@ export async function endpointOai(
 				headers: {
 					"ChatUI-Conversation-ID": conversationId?.toString() ?? "",
 					"X-use-cache": "false",
-					...(locals?.token ? { Authorization: `Bearer ${locals.token}` } : {}),
+					// ✅ فقط استخدم OAuth token إذا كان USE_USER_TOKEN مفعّل
+					...(config.USE_USER_TOKEN === "true" && locals?.token 
+						? { Authorization: `Bearer ${locals.token}` } 
+						: {}),
 				},
 				signal: abortSignal,
 			});
@@ -224,7 +227,10 @@ export async function endpointOai(
 						headers: {
 							"ChatUI-Conversation-ID": conversationId?.toString() ?? "",
 							"X-use-cache": "false",
-							...(locals?.token ? { Authorization: `Bearer ${locals.token}` } : {}),
+							// ✅ فقط استخدم OAuth token إذا كان USE_USER_TOKEN مفعّل
+							...(config.USE_USER_TOKEN === "true" && locals?.token 
+								? { Authorization: `Bearer ${locals.token}` } 
+								: {}),
 						},
 						signal: abortSignal,
 					}
@@ -238,7 +244,10 @@ export async function endpointOai(
 						headers: {
 							"ChatUI-Conversation-ID": conversationId?.toString() ?? "",
 							"X-use-cache": "false",
-							...(locals?.token ? { Authorization: `Bearer ${locals.token}` } : {}),
+							// Only use OAuth token if USE_USER_TOKEN is enabled
+							...(config.USE_USER_TOKEN === "true" && locals?.token 
+								? { Authorization: `Bearer ${locals.token}` } 
+								: {}),
 						},
 						signal: abortSignal,
 					}

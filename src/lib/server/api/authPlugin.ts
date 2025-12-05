@@ -1,4 +1,4 @@
-import Elysia from "elysia";
+import Elysia, { type Cookie } from "elysia";
 import { authenticateRequest } from "../auth";
 
 export const authPlugin = new Elysia({ name: "auth" }).derive(
@@ -11,7 +11,8 @@ export const authPlugin = new Elysia({ name: "auth" }).derive(
 	}> => {
 		const auth = await authenticateRequest(
 			{ type: "elysia", value: headers },
-			{ type: "elysia", value: cookie },
+			// Type assertion needed because Elysia provides Cookie<unknown> but authenticateRequest expects Cookie<string | undefined>
+			{ type: "elysia", value: cookie as unknown as Record<string, Cookie<string | undefined>> },
 			true
 		);
 		return {
@@ -19,6 +20,7 @@ export const authPlugin = new Elysia({ name: "auth" }).derive(
 				user: auth?.user,
 				sessionId: auth?.sessionId,
 				isAdmin: auth?.isAdmin,
+				token: auth?.token,
 			},
 		};
 	}

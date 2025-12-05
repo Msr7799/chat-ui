@@ -149,7 +149,7 @@ export async function findUser(
 
 					session.oauth = updatedOAuth;
 				} catch (err) {
-					logger.error("Error during token refresh:", err);
+					logger.error({ err }, "Error during token refresh");
 					return { user: null, invalidateSession: true };
 				} finally {
 					await releaseLock(lockKey, lockId);
@@ -182,8 +182,10 @@ export async function findUser(
 	};
 }
 export const authCondition = (locals: App.Locals) => {
+	// Allow anonymous users - return impossible condition if no user or sessionId
 	if (!locals.user && !locals.sessionId) {
-		throw new Error("User or sessionId is required");
+		// Return impossible condition that matches no documents
+		return { _id: { $exists: false } };
 	}
 
 	return locals.user
@@ -510,6 +512,12 @@ export async function triggerOauthFlow({
 	url: URL;
 	locals: App.Locals;
 }): Promise<Response> {
+	// ✅ التحقق من أن OAuth مُعد بشكل صحيح
+	if (!loginEnabled) {
+		logger.warn("OAuth flow triggered but loginEnabled is false");
+		throw redirect(302, `${base}/`);
+	}
+	
 	// const referer = request.headers.get("referer");
 	// let redirectURI = `${(referer ? new URL(referer) : url).origin}${base}/login/callback`;
 	let redirectURI = `${url.origin}${base}/login/callback`;

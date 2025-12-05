@@ -27,7 +27,6 @@
 	import { updateDebouncer } from "$lib/utils/updates.js";
 	import SubscribeModal from "$lib/components/SubscribeModal.svelte";
 	import { loading } from "$lib/stores/loading.js";
-	import { requireAuthUser } from "$lib/utils/auth.js";
 
 	let { data = $bindable() } = $props();
 
@@ -356,8 +355,7 @@
 	}
 
 	async function onRetry(payload: { id: Message["id"]; content?: string }) {
-		if (requireAuthUser()) return;
-
+		// ✅ السماح بـ retry بدون login (anonymous mode)
 		const lastMsgId = payload.id;
 		messagesPath = createMessagesPath(messages, lastMsgId);
 
@@ -422,7 +420,11 @@
 		const navigatingAway =
 			navigation.to?.route.id !== page.route.id || navigation.to?.params?.id !== page.params.id;
 
-		if (loading && navigatingAway) {
+		// ✅ تحقق من وجود المحادثة قبل إضافة background generation
+		// لتجنب polling لمحادثات محذوفة
+		const conversationExists = conversations.some((conv) => conv.id === page.params.id);
+		
+		if (loading && navigatingAway && conversationExists) {
 			addBackgroundGeneration({ id: page.params.id, startedAt: Date.now() });
 		}
 

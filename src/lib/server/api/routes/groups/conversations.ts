@@ -12,14 +12,7 @@ import { CONV_NUM_PER_PAGE } from "$lib/constants/pagination";
 export const conversationGroup = new Elysia().use(authPlugin).group("/conversations", (app) => {
 	return (
 		app
-			.guard({
-				as: "scoped",
-				beforeHandle: async ({ locals }) => {
-					if (!locals.user?._id && !locals.sessionId) {
-						return status(401, "Must have a valid session or user");
-					}
-				},
-			})
+			// Removed authentication guard - allow anonymous users to use models
 			.get(
 				"",
 				async ({ locals, query }) => {

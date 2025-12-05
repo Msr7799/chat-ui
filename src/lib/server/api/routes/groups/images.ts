@@ -5,19 +5,18 @@ import { uploadImageToCloudinary, deleteImageFromCloudinary } from "$lib/server/
 import { ObjectId } from "mongodb";
 import { config } from "$lib/server/config";
 import { logger } from "$lib/server/logger";
+import { getApiToken } from "$lib/server/apiToken";
+import { HfInference } from "@huggingface/inference";
 
 const FLUX_MODEL_ID = "black-forest-labs/FLUX.1-schnell";
-const HF_INFERENCE_API = "https://api-inference.huggingface.co/models";
 
 export const imageGroup = new Elysia().group("/images", (app) =>
 	app
 		.use(authPlugin)
 		.post("/generate", async ({ locals, body }) => {
-			// Check authentication
-			if (!locals.user) {
-				throw status(401, "Authentication required to generate images");
-			}
-
+			// ✅ لا نحتاج Google OAuth - فقط HF token
+			// Image generation متاح للجميع باستخدام HF token من .env
+			
 			const { prompt } = body as { prompt: string };
 
 			if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
@@ -29,68 +28,71 @@ export const imageGroup = new Elysia().group("/images", (app) =>
 			}
 
 			try {
-				// Get user token or use server token
-				const apiToken = locals.token || config.OPENAI_API_KEY;
+				// ✅ استخدام HF token من .env (ليس Google OAuth)
+				const apiToken = config.OPENAI_API_KEY || config.HF_TOKEN;
 
 				if (!apiToken) {
-					throw new Error("No API token available");
+					throw new Error("HF_TOKEN not configured in .env");
 				}
 
-				// Call Hugging Face Inference API
 				logger.info(
-					{ model: FLUX_MODEL_ID, userId: locals.user._id },
-					"Generating image with FLUX"
+					{ model: FLUX_MODEL_ID, tokenUsed: apiToken.substring(0, 7) + "..." },
+					"Generating image with FLUX using HuggingFace Inference SDK"
 				);
 
-				const response = await fetch(`${HF_INFERENCE_API}/${FLUX_MODEL_ID}`, {
-					method: "POST",
-					headers: {
-						Authorization: `Bearer ${apiToken}`,
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						inputs: prompt,
-					}),
-				});
+				// ✅ استخدام @huggingface/inference SDK
+				const hf = new HfInference(apiToken);
+				
+				const imageBlob = (await hf.textToImage({
+					model: FLUX_MODEL_ID,
+					inputs: prompt.trim(),
+				})) as unknown as Blob;
 
-				if (!response.ok) {
-					const errorText = await response.text();
-					logger.error({ status: response.status, error: errorText }, "FLUX API error");
-					throw new Error(`Image generation failed: ${response.statusText}`);
-				}
-
-				// Get image as buffer
-				const imageBuffer = Buffer.from(await response.arrayBuffer());
+				// Convert Blob to Buffer
+				const imageBuffer = Buffer.from(await imageBlob.arrayBuffer());
 
 				// Upload to Cloudinary
+				const tags = ["flux", "generated"];
+				if (locals.user) {
+					tags.push(locals.user._id.toString());
+				}
+				
 				const cloudinaryResult = await uploadImageToCloudinary(imageBuffer, {
 					folder: "chat-ui/generated-images",
-					tags: ["flux", "generated", locals.user._id.toString()],
+					tags,
 				});
 
-				// Save to MongoDB
-				const generatedImage = await collections.generatedImages.insertOne({
-					_id: new ObjectId(),
-					userId: locals.user._id,
-					prompt: prompt.trim(),
-					cloudinaryUrl: cloudinaryResult.url,
-					cloudinaryPublicId: cloudinaryResult.publicId,
-					width: cloudinaryResult.width,
-					height: cloudinaryResult.height,
-					modelUsed: FLUX_MODEL_ID,
-					createdAt: new Date(),
-					updatedAt: new Date(),
-				});
+				// Save to MongoDB (if user is logged in)
+				let generatedImageId = new ObjectId();
+				if (locals.user) {
+					const generatedImage = await collections.generatedImages.insertOne({
+						_id: generatedImageId,
+						userId: locals.user._id,
+						prompt: prompt.trim(),
+						cloudinaryUrl: cloudinaryResult.url,
+						cloudinaryPublicId: cloudinaryResult.publicId,
+						width: cloudinaryResult.width,
+						height: cloudinaryResult.height,
+						modelUsed: FLUX_MODEL_ID,
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					});
 
-				logger.info(
-					{ imageId: generatedImage.insertedId, userId: locals.user._id },
-					"Image generated successfully"
-				);
+					logger.info(
+						{ imageId: generatedImage.insertedId, userId: locals.user._id },
+						"Image generated and saved to MongoDB"
+					);
+				} else {
+					logger.info(
+						{ prompt: prompt.trim() },
+						"Image generated for anonymous user (not saved to MongoDB)"
+					);
+				}
 
 				return {
 					success: true,
 					image: {
-						_id: generatedImage.insertedId,
+						_id: generatedImageId,
 						url: cloudinaryResult.url,
 						prompt: prompt.trim(),
 						width: cloudinaryResult.width,

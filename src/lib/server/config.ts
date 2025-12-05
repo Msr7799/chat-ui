@@ -156,7 +156,16 @@ type ExtraConfigKeys =
 	| "OLD_MODELS"
 	| "ENABLE_ASSISTANTS"
 	| "METRICS_ENABLED"
-	| "METRICS_PORT";
+	| "METRICS_PORT"
+	| "OPENID_CLIENT_ID"
+	| "OPENID_CLIENT_SECRET"
+	| "OPENID_PROVIDER_URL"
+	| "OPENID_SCOPES"
+	| "OPENID_NAME_CLAIM"
+	| "OPENID_TOLERANCE"
+	| "OPENID_RESOURCE"
+	| "OPENID_CONFIG"
+	| "USE_USER_TOKEN";
 
 type ConfigProxy = ConfigManager & { [K in ConfigKey | ExtraConfigKeys]: string };
 
