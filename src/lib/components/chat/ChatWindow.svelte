@@ -268,12 +268,12 @@
 		}
 	});
 
-	let chatContainer: HTMLElement | undefined = $state();
+	let chatContainer: HTMLElement | undefined;
 
 	// Force scroll to bottom when user sends a new message
 	// Pattern: user message + empty assistant message are added together
-	let prevMessageCount = $state(messages.length);
-	let forceReattach = $state(0);
+	let prevMessageCount = messages.length;
+	let forceReattach = 0;
 	$effect(() => {
 		if (messages.length > prevMessageCount) {
 			const last = messages.at(-1);

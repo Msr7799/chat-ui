@@ -11,9 +11,10 @@
 
 	let { models, currentModel }: Props = $props();
 
-	let selectedModelId = $state(
-		models.map((m) => m.id).includes(currentModel.id) ? currentModel.id : models[0].id
-	);
+	// Plain component state is enough here; no need for $state
+	let selectedModelId: Model["id"] = models.map((m) => m.id).includes(currentModel.id)
+		? currentModel.id
+		: models[0].id;
 
 	async function handleModelChange() {
 		if (!page.params.id) return;

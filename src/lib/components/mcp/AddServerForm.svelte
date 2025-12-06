@@ -29,11 +29,12 @@
 		submitLabel = "Add Server",
 	}: Props = $props();
 
-	let name = $state(initialName);
-	let url = $state(initialUrl);
-	let headers = $state<KeyValuePair[]>(initialHeaders.length > 0 ? [...initialHeaders] : []);
-	let showHeaderValues = $state<Record<number, boolean>>({});
-	let error = $state<string | null>(null);
+	// Use regular component-local state here to avoid Svelte's state_referenced_locally warnings
+	let name = initialName;
+	let url = initialUrl;
+	let headers: KeyValuePair[] = initialHeaders.length > 0 ? [...initialHeaders] : [];
+	let showHeaderValues: Record<number, boolean> = {};
+	let error: string | null = null;
 
 	function addHeader() {
 		headers = [...headers, { key: "", value: "" }];
