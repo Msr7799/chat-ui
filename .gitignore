@@ -16,8 +16,10 @@ db
 models/*
 !models/add-your-models-here.txt
 
+.env.local
+.env.*.local
+
 .env
-.env.*
 
 auth-google.json
 vercel-env-variables.txt
