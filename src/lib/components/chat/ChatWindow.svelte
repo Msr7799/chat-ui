@@ -1,12 +1,15 @@
 <script lang="ts">
 	import type { Message, MessageFile } from "$lib/types/Message";
-	import { onDestroy, tick } from "svelte";
+	import { onDestroy } from "svelte";
 
 	import IconOmni from "$lib/components/icons/IconOmni.svelte";
 	import CarbonCaretDown from "~icons/carbon/caret-down";
 	import CarbonDirectionRight from "~icons/carbon/direction-right-01";
+	import IconArrowUp from "~icons/lucide/arrow-up";
+	import IconMic from "~icons/lucide/mic";
 
 	import ChatInput from "./ChatInput.svelte";
+	import VoiceRecorder from "./VoiceRecorder.svelte";
 	import StopGeneratingBtn from "../StopGeneratingBtn.svelte";
 	import type { Model } from "$lib/types/Model";
 	import FileDropzone from "./FileDropzone.svelte";
@@ -23,15 +26,29 @@
 	import ChatIntroduction from "./ChatIntroduction.svelte";
 	import UploadedFile from "./UploadedFile.svelte";
 	import { useSettingsStore } from "$lib/stores/settings";
+	import { error } from "$lib/stores/errors";
 	import ModelSwitch from "./ModelSwitch.svelte";
+	import IconNew from "$lib/components/icons/IconNew.svelte";
+	import { isAborted } from "$lib/stores/isAborted";
 	import { routerExamples } from "$lib/constants/routerExamples";
+	import { mcpExamples } from "$lib/constants/mcpExamples";
 	import type { RouterFollowUp, RouterExample } from "$lib/constants/routerExamples";
+	import { allBaseServersEnabled, mcpServersLoaded } from "$lib/stores/mcpServers";
 	import { shareModal } from "$lib/stores/shareModal";
+	import LucideHammer from "~icons/lucide/hammer";
 
 	import { fly } from "svelte/transition";
 	import { cubicInOut } from "svelte/easing";
 
 	import { isVirtualKeyboard } from "$lib/utils/isVirtualKeyboard";
+	import { requireAuthUser } from "$lib/utils/auth";
+	import { page } from "$app/state";
+	import {
+		isMessageToolCallUpdate,
+		isMessageToolErrorUpdate,
+		isMessageToolResultUpdate,
+	} from "$lib/utils/messageUpdates";
+	import type { ToolFront } from "$lib/types/Tool";
 
 	interface Props {
 		messages?: Message[];
@@ -73,12 +90,27 @@
 	let editMsdgId: Message["id"] | null = $state(null);
 	let pastedLongContent = $state(false);
 
+	// Voice recording state
+	let isRecording = $state(false);
+	let isTranscribing = $state(false);
+	let transcriptionEnabled = $derived(
+		!!(page.data as { transcriptionEnabled?: boolean }).transcriptionEnabled
+	);
+	let isTouchDevice = $derived(browser && navigator.maxTouchPoints > 0);
+
 	const handleSubmit = () => {
-		// ✅ السماح بالإرسال بدون login (anonymous mode)
-		if (loading || !draft) return;
+		if (requireAuthUser() || loading || !draft) return;
 		onmessage?.(draft);
 		draft = "";
 	};
+
+	function handleNewChatClick(e: MouseEvent) {
+		isAborted.set(true);
+
+		if (requireAuthUser()) {
+			e.preventDefault();
+		}
+	}
 
 	let lastTarget: EventTarget | null = null;
 
@@ -135,17 +167,17 @@
 	};
 
 	let lastMessage = $derived(browser && (messages.at(-1) as Message));
+	// Scroll signal includes tool updates and thinking blocks to trigger scroll on all content changes
 	let scrollSignal = $derived.by(() => {
 		const last = messages.at(-1) as Message | undefined;
-		return last ? `${last.id}:${last.content.length}:${messages.length}` : `${messages.length}:0`;
-	});
-	let lastIsError = $derived(
-		lastMessage &&
-			!loading &&
-			(lastMessage.from === "user" ||
-				lastMessage.updates?.findIndex((u) => u.type === "status" && u.status === "error") !== -1)
-	);
+		if (!last) return `${messages.length}:0`;
 
+		// Count tool updates to trigger scroll when new tools are called or complete
+		const toolUpdateCount = last.updates?.length ?? 0;
+
+		// Include content length, tool count, and message count in signal
+		return `${last.id}:${last.content.length}:${messages.length}:${toolUpdateCount}`;
+	});
 	let streamingAssistantMessage = $derived(
 		(() => {
 			for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -163,6 +195,33 @@
 			? (streamingRouterMetadata.model.split("/").pop() ?? streamingRouterMetadata.model)
 			: ""
 	);
+
+	let lastIsError = $derived(
+		!loading &&
+			(streamingAssistantMessage?.updates?.findIndex(
+				(u) => u.type === "status" && u.status === "error"
+			) ?? -1) !== -1
+	);
+
+	// Expose currently running tool call name (if any) from the streaming assistant message
+	const availableTools: ToolFront[] = $derived.by(
+		() => (page.data as { tools?: ToolFront[] } | undefined)?.tools ?? []
+	);
+	let streamingToolCallName = $derived.by(() => {
+		const updates = streamingAssistantMessage?.updates ?? [];
+		if (!updates.length) return null;
+		const done = new Set<string>();
+		for (const u of updates) {
+			if (isMessageToolResultUpdate(u) || isMessageToolErrorUpdate(u)) done.add(u.uuid);
+		}
+		for (let i = updates.length - 1; i >= 0; i -= 1) {
+			const u = updates[i];
+			if (isMessageToolCallUpdate(u) && !done.has(u.uuid)) {
+				return u.call.name;
+			}
+		}
+		return null;
+	});
 	let showRouterDetails = $state(false);
 	let routerDetailsTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -211,18 +270,29 @@
 
 	let chatContainer: HTMLElement | undefined = $state();
 
-	async function scrollToBottom() {
-		await tick();
-		if (!chatContainer) return;
-		chatContainer.scrollTop = chatContainer.scrollHeight;
-	}
-
-	// If last message is from user, scroll to bottom
+	// Force scroll to bottom when user sends a new message
+	// Pattern: user message + empty assistant message are added together
+	let prevMessageCount = $state(messages.length);
+	let forceReattach = $state(0);
 	$effect(() => {
-		if (lastMessage && lastMessage.from === "user") {
-			scrollToBottom();
+		if (messages.length > prevMessageCount) {
+			const last = messages.at(-1);
+			const secondLast = messages.at(-2);
+			const userJustSentMessage =
+				messages.length === prevMessageCount + 2 &&
+				secondLast?.from === "user" &&
+				last?.from === "assistant" &&
+				last?.content === "";
+
+			if (userJustSentMessage) {
+				forceReattach++;
+			}
 		}
+		prevMessageCount = messages.length;
 	});
+
+	// Combined scroll dependency for the action
+	let scrollDependency = $derived({ signal: scrollSignal, forceReattach });
 
 	const settings = useSettingsStore();
 	let hideRouterExamples = $derived($settings.hidePromptExamples?.[currentModel.id] ?? false);
@@ -230,6 +300,12 @@
 	// Respect per‑model multimodal toggle from settings (force enable)
 	let modelIsMultimodalOverride = $derived($settings.multimodalOverrides?.[currentModel.id]);
 	let modelIsMultimodal = $derived((modelIsMultimodalOverride ?? currentModel.multimodal) === true);
+
+	// Determine tool support for the current model (server-provided capability with user override)
+	let modelSupportsTools = $derived(
+		($settings.toolsOverrides?.[currentModel.id] ??
+			(currentModel as unknown as { supportsTools?: boolean }).supportsTools) === true
+	);
 
 	// Always allow common text-like files; add images only when model is multimodal
 	import { TEXT_MIME_ALLOWLIST, IMAGE_MIME_ALLOWLIST_DEFAULT } from "$lib/constants/mime";
@@ -248,9 +324,13 @@
 	let focused = $state(false);
 
 	let activeRouterExamplePrompt = $state<string | null>(null);
+	// Use MCP examples when all base servers are enabled, otherwise use router examples
+	let activeExamples = $derived<RouterExample[]>(
+		$allBaseServersEnabled ? mcpExamples : routerExamples
+	);
 	let routerFollowUps = $derived<RouterFollowUp[]>(
 		activeRouterExamplePrompt
-			? (routerExamples.find((ex) => ex.prompt === activeRouterExamplePrompt)?.followUps ?? [])
+			? (activeExamples.find((ex) => ex.prompt === activeRouterExamplePrompt)?.followUps ?? [])
 			: []
 	);
 	let routerUserMessages = $derived(messages.filter((msg) => msg.from === "user"));
@@ -276,19 +356,18 @@
 			return;
 		}
 
-		const match = routerExamples.find((ex) => ex.prompt.trim() === firstUserMessage.content.trim());
+		const match = activeExamples.find((ex) => ex.prompt.trim() === firstUserMessage.content.trim());
 		activeRouterExamplePrompt = match ? match.prompt : null;
 	});
 
 	function triggerPrompt(prompt: string) {
-		// ✅ السماح بالتشغيل بدون login
-		if (loading) return;
+		if (requireAuthUser() || loading) return;
 		draft = prompt;
 		handleSubmit();
 	}
 
 	async function startExample(example: RouterExample) {
-		// ✅ السماح بالأمثلة بدون login
+		if (requireAuthUser()) return;
 		activeRouterExamplePrompt = example.prompt;
 
 		if (browser && example.attachments?.length) {
@@ -316,6 +395,71 @@
 	function startFollowUp(followUp: RouterFollowUp) {
 		triggerPrompt(followUp.prompt);
 	}
+
+	async function handleRecordingConfirm(audioBlob: Blob) {
+		isRecording = false;
+		isTranscribing = true;
+
+		try {
+			const response = await fetch(`${base}/api/transcribe`, {
+				method: "POST",
+				headers: { "Content-Type": audioBlob.type },
+				body: audioBlob,
+			});
+
+			if (!response.ok) {
+				throw new Error(await response.text());
+			}
+
+			const { text } = await response.json();
+			const trimmedText = text?.trim();
+			if (trimmedText) {
+				// Append transcribed text to draft
+				draft = draft.trim() ? `${draft.trim()} ${trimmedText}` : trimmedText;
+			}
+		} catch (err) {
+			console.error("Transcription error:", err);
+			$error = "Transcription failed. Please try again.";
+		} finally {
+			isTranscribing = false;
+		}
+	}
+
+	async function handleRecordingSend(audioBlob: Blob) {
+		isRecording = false;
+		isTranscribing = true;
+
+		try {
+			const response = await fetch(`${base}/api/transcribe`, {
+				method: "POST",
+				headers: { "Content-Type": audioBlob.type },
+				body: audioBlob,
+			});
+
+			if (!response.ok) {
+				throw new Error(await response.text());
+			}
+
+			const { text } = await response.json();
+			const trimmedText = text?.trim();
+			if (trimmedText) {
+				// Set draft and send immediately
+				draft = draft.trim() ? `${draft.trim()} ${trimmedText}` : trimmedText;
+				handleSubmit();
+			}
+		} catch (err) {
+			console.error("Transcription error:", err);
+			$error = "Transcription failed. Please try again.";
+		} finally {
+			isTranscribing = false;
+		}
+	}
+
+	function handleRecordingError(message: string) {
+		console.error("Recording error:", message);
+		isRecording = false;
+		$error = message;
+	}
 </script>
 
 <svelte:window
@@ -331,12 +475,22 @@
 />
 
 <div class="relative z-[-1] min-h-0 min-w-0">
+	<!-- زر محادثة جديدة عائم في الزاوية العلوية اليمنى (يظهر فقط من md وما فوق) -->
+	<a
+		href={`${base}/`}
+		onclick={handleNewChatClick}
+		class="fixed right-5 top-5 z-20 hidden h-11 w-11 items-center justify-center rounded-xl border border-gray-600/60 bg-gray-900/80 text-gray-100 shadow-lg backdrop-blur-sm transition-all hover:bg-gray-800 hover:shadow-xl dark:border-gray-700 dark:bg-[#18181b]/80 dark:hover:bg-black md:flex"
+		title="New Chat"
+		aria-label="New Chat"
+	>
+		<IconNew classNames="text-xl" />
+	</a>
 	{#if shareModalOpen}
 		<ShareConversationModal open={shareModalOpen} onclose={() => shareModal.close()} />
 	{/if}
 	<div
 		class="scrollbar-custom h-full overflow-y-auto"
-		use:snapScrollToBottom={scrollSignal}
+		use:snapScrollToBottom={scrollDependency}
 		bind:this={chatContainer}
 	>
 		<div
@@ -394,16 +548,16 @@
 
 	<div
 		class="pointer-events-none absolute inset-x-0 bottom-0 z-0 mx-auto flex w-full
-			max-w-3xl flex-col items-center justify-center bg-gradient-to-t from-white
-			via-white/100 to-white/0 px-3.5 pt-2 dark:border-gray-800
+			max-w-3xl flex-col items-center justify-center bg-gradient-to-t from-[#f3f4f6]
+			via-[#f3f4f6]/100 to-[#f3f4f6]/0 px-3.5 pt-2 dark:border-gray-800
 			dark:from-gray-900 dark:via-gray-900/100
 			dark:to-gray-900/0 max-sm:py-0 sm:px-5 md:pb-4 xl:max-w-4xl [&>*]:pointer-events-auto"
 	>
-		{#if !draft.length && !messages.length && !sources.length && !loading && currentModel.isRouter && routerExamples.length && !hideRouterExamples && !lastIsError}
+		{#if !draft.length && !messages.length && !sources.length && !loading && currentModel.isRouter && activeExamples.length && !hideRouterExamples && !lastIsError && $mcpServersLoaded}
 			<div
 				class="no-scrollbar mb-3 flex w-full select-none justify-start gap-2 overflow-x-auto whitespace-nowrap text-gray-400 dark:text-gray-500"
 			>
-				{#each routerExamples as ex}
+				{#each activeExamples as ex}
 					<button
 						class="flex items-center rounded-lg bg-gray-100/90 px-2 py-0.5 text-center text-sm backdrop-blur hover:text-gray-500 dark:bg-gray-700/50 dark:hover:text-gray-400"
 						onclick={() => startExample(ex)}>{ex.title}</button
@@ -473,7 +627,18 @@
 					"max-sm:mb-4": focused && isVirtualKeyboard(),
 				}}
 			>
-				{#if onDrag && isFileUploadEnabled}
+				{#if isRecording || isTranscribing}
+					<VoiceRecorder
+						{isTranscribing}
+						{isTouchDevice}
+						oncancel={() => {
+							isRecording = false;
+						}}
+						onconfirm={handleRecordingConfirm}
+						onsend={handleRecordingSend}
+						onerror={handleRecordingError}
+					/>
+				{:else if onDrag && isFileUploadEnabled}
 					<FileDropzone bind:files bind:onDrag mimeTypes={activeMimeTypes} />
 				{:else}
 					<div
@@ -493,6 +658,7 @@
 								{onPaste}
 								disabled={isReadOnly || lastIsError}
 								{modelIsMultimodal}
+								{modelSupportsTools}
 								bind:focused
 							/>
 						{/if}
@@ -501,11 +667,24 @@
 							<StopGeneratingBtn
 								onClick={() => onstop?.()}
 								showBorder={true}
-								classNames="absolute bottom-2 right-2 size-7 self-end rounded-full border bg-white text-black shadow transition-none dark:border-transparent dark:bg-gray-600 dark:text-white"
+								classNames="absolute bottom-2 right-2 size-8 sm:size-7 self-end rounded-full border bg-[#f3f4f6] text-black shadow transition-none dark:border-transparent dark:bg-gray-600 dark:text-white"
 							/>
 						{:else}
+							{#if transcriptionEnabled}
+								<button
+									type="button"
+									class="btn absolute bottom-2 right-10 mr-1.5 size-8 self-end rounded-full border bg-[#f3f4f6]/70 text-gray-500 transition-none hover:bg-[#e5e7eb] hover:text-gray-700 dark:border-transparent dark:bg-gray-600/50 dark:text-gray-300 dark:hover:bg-gray-500 dark:hover:text-white sm:right-9 sm:size-7"
+									disabled={isReadOnly}
+									onclick={() => {
+										isRecording = true;
+									}}
+									aria-label="Start voice recording"
+								>
+									<IconMic class="size-4" />
+								</button>
+							{/if}
 							<button
-								class="btn absolute bottom-2 right-2 size-7 self-end rounded-full border bg-white text-black shadow transition-none enabled:hover:bg-white enabled:hover:shadow-inner dark:border-transparent dark:bg-gray-600 dark:text-white dark:hover:enabled:bg-black {!draft ||
+								class="btn absolute bottom-2 right-2 size-8 self-end rounded-full border bg-[#f3f4f6] text-black shadow transition-none enabled:hover:bg-[#e5e7eb] enabled:hover:shadow-inner dark:border-transparent dark:bg-gray-600 dark:text-white dark:hover:enabled:bg-black sm:size-7 {!draft ||
 								isReadOnly
 									? ''
 									: '!bg-black !text-white dark:!bg-white dark:!text-black'}"
@@ -514,20 +693,7 @@
 								aria-label="Send message"
 								name="submit"
 							>
-								<svg
-									width="1em"
-									height="1em"
-									viewBox="0 0 32 32"
-									fill="none"
-									xmlns="http://www.w3.org/2000/svg"
-								>
-									<path
-										fill-rule="evenodd"
-										clip-rule="evenodd"
-										d="M17.0606 4.23197C16.4748 3.64618 15.525 3.64618 14.9393 4.23197L5.68412 13.4871C5.09833 14.0729 5.09833 15.0226 5.68412 15.6084C6.2699 16.1942 7.21965 16.1942 7.80544 15.6084L14.4999 8.91395V26.7074C14.4999 27.5359 15.1715 28.2074 15.9999 28.2074C16.8283 28.2074 17.4999 27.5359 17.4999 26.7074V8.91395L24.1944 15.6084C24.7802 16.1942 25.7299 16.1942 26.3157 15.6084C26.9015 15.0226 26.9015 14.0729 26.3157 13.4871L17.0606 4.23197Z"
-										fill="currentColor"
-									/>
-								</svg>
+								<IconArrowUp />
 							</button>
 						{/if}
 					</div>
@@ -540,9 +706,23 @@
 				}}
 			>
 				{#if models.find((m) => m.id === currentModel.id)}
-					{#if !currentModel.isRouter || !loading}
+					{#if loading && streamingToolCallName}
+						<span class="inline-flex items-center gap-1 whitespace-nowrap text-xs">
+							<LucideHammer class="size-3" />
+							Calling tool
+							<span class="loading-dots font-medium">
+								{availableTools.find((t) => t.name === streamingToolCallName)?.displayName ??
+									streamingToolCallName}
+							</span>
+						</span>
+					{:else if !currentModel.isRouter || !loading}
 						<a
 							href="{base}/settings/{currentModel.id}"
+							onclick={(e) => {
+								if (requireAuthUser()) {
+									e.preventDefault();
+								}
+							}}
 							class="inline-flex items-center gap-1 hover:underline"
 						>
 							{#if currentModel.isRouter}
@@ -553,7 +733,7 @@
 							{/if}
 							<CarbonCaretDown class="-ml-0.5 text-xxs" />
 						</a>
-					{:else if showRouterDetails && streamingRouterMetadata}
+					{:else if showRouterDetails && streamingRouterMetadata?.route}
 						<div
 							class="mr-2 flex items-center gap-1.5 whitespace-nowrap text-[.70rem] text-xs leading-none text-gray-400 dark:text-gray-400"
 						>

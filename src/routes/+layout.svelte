@@ -22,7 +22,17 @@
 	import IconShare from "$lib/components/icons/IconShare.svelte";
 	import { shareModal } from "$lib/stores/shareModal";
 	import BackgroundGenerationPoller from "$lib/components/BackgroundGenerationPoller.svelte";
-	import { removeBackgroundGeneration } from "$lib/stores/backgroundGenerations";
+	import { requireAuthUser } from "$lib/utils/auth";
+	import Logo from "$lib/components/icons/Logo.svelte";
+	import CarbonImage from "~icons/carbon/image";
+	import CarbonSettings from "~icons/carbon/settings";
+	import CarbonCube from "~icons/carbon/cube";
+	import IconSun from "$lib/components/icons/IconSun.svelte";
+	import IconMoon from "$lib/components/icons/IconMoon.svelte";
+	import { switchTheme, subscribeToTheme } from "$lib/switchTheme";
+	import IconNew from "$lib/components/icons/IconNew.svelte";
+	import IconMCP from "$lib/components/icons/IconMCP.svelte";
+	import { browser } from "$app/environment";
 
 	let { data = $bindable(), children } = $props();
 
@@ -37,6 +47,8 @@
 	});
 
 	let isNavCollapsed = $state(false);
+	let isDark = $state(false);
+	let unsubscribeTheme: (() => void) | undefined;
 
 	let errorToastTimeout: ReturnType<typeof setTimeout>;
 	let currentError: string | undefined = $state();
@@ -57,6 +69,15 @@
 		}, 5000);
 	}
 
+	function handleCollapsedNewChatClick(e: MouseEvent) {
+		isAborted.set(true);
+		if (requireAuthUser()) {
+			e.preventDefault();
+			return;
+		}
+		goto(`${base}/`, { invalidateAll: true });
+	}
+
 	let canShare = $derived(
 		publicConfig.isHuggingChat &&
 			Boolean(page.params?.id) &&
@@ -69,7 +90,7 @@
 			.delete()
 			.then(handleResponse)
 			.then(async () => {
-				conversations = conversations.filter((conv) => conv.id !== id);
+				conversations = conversations.filter((conv: { id: string }) => conv.id !== id);
 
 				if (page.params.id === id) {
 					await goto(`${base}/`, { invalidateAll: true });
@@ -87,7 +108,9 @@
 			.patch({ title })
 			.then(handleResponse)
 			.then(async () => {
-				conversations = conversations.map((conv) => (conv.id === id ? { ...conv, title } : conv));
+				conversations = conversations.map((conv: { id: string; title: string }) =>
+					conv.id === id ? { ...conv, title } : conv
+				);
 			})
 			.catch((err) => {
 				console.error(err);
@@ -96,12 +119,13 @@
 	}
 
 	function closeWelcomeModal() {
-		// ✅ السماح بإغلاق Welcome Modal بدون login (anonymous mode)
+		if (requireAuthUser()) return;
 		settings.set({ welcomeModalSeen: true });
 	}
 
 	onDestroy(() => {
 		clearTimeout(errorToastTimeout);
+		unsubscribeTheme?.();
 	});
 
 	$effect(() => {
@@ -110,7 +134,9 @@
 
 	$effect(() => {
 		if ($titleUpdate) {
-			const convIdx = conversations.findIndex(({ id }) => id === $titleUpdate?.convId);
+			const convIdx = conversations.findIndex(
+				({ id }: { id: string }) => id === $titleUpdate?.convId
+			);
 
 			if (convIdx != -1) {
 				conversations[convIdx].title = $titleUpdate?.title ?? conversations[convIdx].title;
@@ -123,6 +149,12 @@
 	const settings = createSettingsStore(data.settings);
 
 	onMount(async () => {
+		if (browser) {
+			unsubscribeTheme = subscribeToTheme(({ isDark: nextIsDark }) => {
+				isDark = nextIsDark;
+			});
+		}
+
 		if (page.url.searchParams.has("model")) {
 			await settings
 				.instantSet({
@@ -159,7 +191,7 @@
 			if (oPressed && e.shiftKey && metaOrCtrl) {
 				e.preventDefault();
 				isAborted.set(true);
-				// ✅ السماح بـ keyboard shortcut بدون login
+				if (requireAuthUser()) return;
 				goto(`${base}/`, { invalidateAll: true });
 			}
 		};
@@ -171,7 +203,7 @@
 	let mobileNavTitle = $derived(
 		["/models", "/privacy"].includes(page.route.id ?? "")
 			? ""
-			: conversations.find((conv) => conv.id === page.params.id)?.title
+			: conversations.find((conv: { id: string }) => conv.id === page.params.id)?.title
 	);
 
 	// Show the welcome modal once on first app load
@@ -239,15 +271,157 @@
 	<ExpandNavigation
 		isCollapsed={isNavCollapsed}
 		onClick={() => (isNavCollapsed = !isNavCollapsed)}
-		classNames="absolute inset-y-0 z-10 my-auto {!isNavCollapsed
+		classNames="absolute inset-y-0 z-20 my-auto {!isNavCollapsed
 			? 'left-[290px]'
 			: 'left-0'} *:transition-transform"
 	/>
 
+	{#if isNavCollapsed}
+		<!-- شريط أيقونات رأسي يظهر عند إغلاق السايد بار -->
+		<div
+			class="pointer-events-none fixed inset-y-0 left-0 z-10 hidden w-14 flex-col justify-between border-r border-gray-800/60 bg-[#181a20] py-4 text-gray-300 md:flex"
+		>
+			<!-- أعلى الشريط: Avatar, Home, New Chat, Models, Gallery, MCP -->
+			<div class="flex flex-col items-center gap-4">
+				<!-- أفاتار المستخدم -->
+				<a
+					href="{base}/settings/account"
+					onclick={(e) => {
+						if (requireAuthUser()) {
+							e.preventDefault();
+						}
+					}}
+					class="pointer-events-auto flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border-2 border-gray-200 bg-indigo-500 text-xs font-semibold uppercase text-white dark:border-gray-700"
+					aria-label="Account"
+					title="Account settings"
+				>
+					{#if data.user?.avatarUrl}
+						<img
+							src={data.user.avatarUrl}
+							referrerpolicy="no-referrer"
+							class="size-full rounded-full object-cover"
+							alt={data.user.username || data.user.email}
+							onerror={(e) => {
+								const target = e.currentTarget as HTMLImageElement;
+								target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+									data.user?.username || data.user?.email || "U"
+								)}&background=6366f1&color=fff&size=128`;
+							}}
+						/>
+					{:else}
+						<span class="text-xs font-semibold uppercase">
+							{(data.user?.username || data.user?.email || "U")[0]}
+						</span>
+					{/if}
+				</a>
+				<!-- زر الصفحة الرئيسية (الـ Chat الرئيسي) -->
+				<a
+					href="{base}/"
+					onclick={(e) => {
+						if (requireAuthUser()) {
+							e.preventDefault();
+						}
+					}}
+					class="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-lg text-gray-300 hover:bg-white/10"
+					aria-label="Home"
+					title="Chat home"
+				>
+					<Logo classNames="size-5 invert" />
+				</a>
+				<!-- زر محادثة جديدة -->
+				<a
+					href="{base}/"
+					onclick={handleCollapsedNewChatClick}
+					class="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-lg text-gray-300 hover:bg-white/10"
+					aria-label="New Chat"
+					title="New Chat"
+				>
+					<IconNew classNames="text-xl" />
+				</a>
+				<!-- زر المودلز بأيقونة مختلفة -->
+				<a
+					href="{base}/models"
+					onclick={(e) => {
+						if (requireAuthUser()) {
+							e.preventDefault();
+						}
+					}}
+					class="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-lg text-gray-300 hover:bg-white/10"
+					aria-label="Models"
+					title="Models"
+				>
+					<CarbonCube class="text-xl" />
+				</a>
+				<!-- زر الـ Gallery تحت New Chat مباشرة -->
+				<a
+					href="{base}/gallery"
+					onclick={(e) => {
+						if (requireAuthUser()) {
+							e.preventDefault();
+						}
+					}}
+					class="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-lg text-gray-300 hover:bg-white/10"
+					aria-label="Gallery"
+					title="Gallery"
+				>
+					<CarbonImage class="text-xl" />
+				</a>
+				<!-- زر MCP مباشرة بعد Gallery -->
+				<button
+					type="button"
+					class="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-lg text-gray-300 hover:bg-white/10"
+					aria-label="MCP Servers"
+					title="MCP Servers"
+					onclick={() => {
+						if (requireAuthUser()) {
+							return;
+						}
+						shareModal.open();
+					}}
+				>
+					<IconMCP classNames="size-5" />
+				</button>
+			</div>
+			<!-- الأسفل: Theme ثم Settings -->
+			<div class="flex flex-col items-center gap-4">
+				<button
+					type="button"
+					class="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-lg text-gray-300 hover:bg-white/10"
+					aria-label="Toggle theme"
+					onclick={() => {
+						switchTheme();
+					}}
+					title="Theme"
+				>
+					{#if browser}
+						{#if isDark}
+							<IconSun />
+						{:else}
+							<IconMoon />
+						{/if}
+					{/if}
+				</button>
+				<a
+					href="{base}/settings/application"
+					onclick={(e) => {
+						if (requireAuthUser()) {
+							e.preventDefault();
+						}
+					}}
+					class="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-lg text-gray-300 hover:bg-white/10"
+					aria-label="Settings"
+					title="Settings"
+				>
+					<CarbonSettings class="text-xl" />
+				</a>
+			</div>
+		</div>
+	{/if}
+
 	{#if canShare}
 		<button
 			type="button"
-			class="hidden size-8 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white/90 text-sm font-medium text-gray-700 shadow-sm hover:bg-white/60 hover:text-gray-500 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-200 dark:hover:bg-gray-700 md:absolute md:right-6 md:top-5 md:flex
+			class="hidden size-8 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-[#f3f4f6]/55 text-sm font-medium text-gray-700 shadow-sm hover:bg-[#e5e7eb] hover:text-gray-500 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-200 dark:hover:bg-gray-700 md:absolute md:right-6 md:top-5 md:flex
 				{$loading ? 'cursor-not-allowed opacity-40' : ''}"
 			onclick={() => shareModal.open()}
 			aria-label="Share conversation"
@@ -266,7 +440,7 @@
 		/>
 	</MobileNav>
 	<nav
-		class="grid max-h-screen grid-cols-1 grid-rows-[auto,1fr,auto] overflow-hidden *:w-[290px] max-md:hidden"
+		class="grid max-h-dvh grid-cols-1 grid-rows-[auto,1fr,auto] overflow-hidden *:w-[290px] max-md:hidden"
 	>
 		<NavMenu
 			{conversations}
@@ -282,7 +456,7 @@
 
 	{#if publicConfig.PUBLIC_PLAUSIBLE_SCRIPT_URL}
 		<script>
-			(window.plausible =
+			((window.plausible =
 				window.plausible ||
 				function () {
 					(plausible.q = plausible.q || []).push(arguments);
@@ -291,7 +465,7 @@
 					plausible.init ||
 					function (i) {
 						plausible.o = i || {};
-					});
+					}));
 			plausible.init();
 		</script>
 	{/if}

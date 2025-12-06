@@ -4,6 +4,21 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="theme-color" content="rgb(249, 250, 251)" />
+		<link rel="icon" href="/chatui-new/logo.svg" type="image/svg+xml" />
+		<link
+			rel="icon"
+			href="/chatui-new/light/logo.svg"
+			type="image/svg+xml"
+			media="(prefers-color-scheme: light)"
+		/>
+		<link
+			rel="icon"
+			href="/chatui-new/logo.svg"
+			type="image/svg+xml"
+			media="(prefers-color-scheme: dark)"
+		/>
+		<link rel="apple-touch-icon" href="/chatui-new/apple-touch-icon-180x180.png" />
+		<link rel="manifest" href="/chatui-new/site.webmanifest" />
 		<script>
 			(function () {
 				try {
@@ -23,7 +38,7 @@
 		</script>
 		%sveltekit.head%
 	</head>
-	<body data-sveltekit-preload-data="hover" class="h-full dark:bg-gray-900">
+	<body data-sveltekit-preload-data="hover" class="h-full bg-[#f3f4f6] dark:bg-gray-900">
 		<div id="app" class="contents h-full">%sveltekit.body%</div>
 
 		<!-- Google Tag Manager -->

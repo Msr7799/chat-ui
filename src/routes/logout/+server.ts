@@ -7,10 +7,10 @@ import { config } from "$lib/server/config";
 export async function POST({ locals, cookies }) {
 	if (locals.user?._id) {
 		const logoutTime = new Date();
-		
+
 		// Fetch current user to get lastLoginAt and current onlineDuration
 		const currentUser = await collections.users.findOne({ _id: locals.user._id });
-		
+
 		let durationToAdd = 0;
 		if (currentUser?.lastLoginAt) {
 			durationToAdd = logoutTime.getTime() - new Date(currentUser.lastLoginAt).getTime();
@@ -18,9 +18,9 @@ export async function POST({ locals, cookies }) {
 
 		await collections.users.updateOne(
 			{ _id: locals.user._id },
-			{ 
+			{
 				$set: { lastLogoutAt: logoutTime },
-				$inc: { onlineDuration: durationToAdd } // Cumulative duration
+				$inc: { onlineDuration: durationToAdd }, // Cumulative duration
 			}
 		);
 	}

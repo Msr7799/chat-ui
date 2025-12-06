@@ -8,12 +8,18 @@
 </script>
 
 <script lang="ts">
+	import { base } from "$app/paths";
 	import { resolve } from "$app/paths";
 
 	import Logo from "$lib/components/icons/Logo.svelte";
+	import IconNew from "$lib/components/icons/IconNew.svelte";
+	import CarbonUser from "~icons/carbon/user";
+	import CarbonImage from "~icons/carbon/image";
+	import CarbonSettings from "~icons/carbon/settings";
+	import CarbonLogout from "~icons/carbon/logout";
 	import IconSun from "$lib/components/icons/IconSun.svelte";
 	import IconMoon from "$lib/components/icons/IconMoon.svelte";
-	import IconNew from "$lib/components/icons/IconNew.svelte";
+	import IconMCP from "$lib/components/icons/IconMCP.svelte";
 	import { switchTheme, subscribeToTheme } from "$lib/switchTheme";
 	import { isAborted } from "$lib/stores/isAborted";
 	import { onDestroy } from "svelte";
@@ -29,7 +35,8 @@
 	import { usePublicConfig } from "$lib/utils/PublicConfig.svelte";
 	import { useAPIClient, handleResponse } from "$lib/APIClient";
 	import { requireAuthUser } from "$lib/utils/auth";
-	import UserMenu from "./UserMenu.svelte";
+	import { enabledServersCount } from "$lib/stores/mcpServers";
+	import MCPServerManager from "./mcp/MCPServerManager.svelte";
 
 	const publicConfig = usePublicConfig();
 	const client = useAPIClient();
@@ -52,6 +59,27 @@
 
 	let hasMore = $state(true);
 
+	// Online Duration Logic
+	function formatDuration(ms: number | undefined) {
+		if (!ms) return "0m";
+		const minutes = Math.floor(ms / 60000);
+		const hours = Math.floor(minutes / 60);
+		const remainingMinutes = minutes % 60;
+
+		if (hours > 0) {
+			return `${hours}h ${remainingMinutes}m`;
+		}
+		return `${remainingMinutes}m`;
+	}
+
+	// Calculate current online duration if user is logged in
+	let currentDuration = $derived(
+		// @ts-ignore - lastLoginAt and onlineDuration are added dynamically
+		((user?.onlineDuration || 0) as number) +
+			// @ts-ignore
+			(user?.lastLoginAt ? new Date().getTime() - new Date(user.lastLoginAt).getTime() : 0)
+	);
+
 	function handleNewChatClick(e: MouseEvent) {
 		isAborted.set(true);
 
@@ -63,6 +91,30 @@
 	function handleNavItemClick(e: MouseEvent) {
 		if (requireAuthUser()) {
 			e.preventDefault();
+		}
+	}
+
+	function handleLogin() {
+		const currentPath = page.url.pathname + page.url.search;
+		window.location.href = resolve("/login") + `?next=${encodeURIComponent(currentPath)}`;
+	}
+
+	async function handleLogout() {
+		try {
+			const logoutUrl = resolve("/logout"); // Or /api/v2/logout depending on implementation, typically /logout route handles it
+			// Use fetch to post to logout route
+			const response = await fetch(logoutUrl, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+			});
+
+			if (response.ok || response.redirected) {
+				window.location.href = resolve("/");
+			}
+		} catch (error) {
+			console.error("Logout failed:", error);
 		}
 	}
 
@@ -87,15 +139,16 @@
 
 	async function handleVisible() {
 		p++;
-		const newConvs = await client.conversations
+		const response = await client.conversations
 			.get({
 				query: {
 					p,
 				},
 			})
 			.then(handleResponse)
-			.then((r: { conversations: ConvSidebar[] }) => r.conversations)
-			.catch((): ConvSidebar[] => []);
+			.catch(() => null);
+
+		const newConvs = response && "conversations" in response ? response.conversations : [];
 
 		if (newConvs.length === 0) {
 			hasMore = false;
@@ -114,6 +167,8 @@
 
 	let isDark = $state(false);
 	let unsubscribeTheme: (() => void) | undefined;
+	let showMcpModal = $state(false);
+	let showUserMenu = $state(false);
 
 	if (browser) {
 		unsubscribeTheme = subscribeToTheme(({ isDark: nextIsDark }) => {
@@ -131,14 +186,14 @@
 >
 	<a
 		class="flex select-none items-center rounded-xl text-lg font-semibold"
-		href="{publicConfig.PUBLIC_ORIGIN}{resolve('/')}"
+		href="{publicConfig.PUBLIC_ORIGIN}{base}/"
 	>
 		<Logo classNames="dark:invert mr-[2px]" />
 		{publicConfig.PUBLIC_APP_NAME}
 	</a>
 	<div class="flex items-center gap-2">
 		<a
-			href={resolve("/")}
+			href={`${base}/`}
 			onclick={handleNewChatClick}
 			class="flex size-9 items-center justify-center rounded-lg border bg-white text-gray-700 shadow-sm transition-all hover:bg-gray-50 hover:shadow-md dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
 			title="New Chat (Ctrl/Cmd + Shift + O)"
@@ -146,7 +201,117 @@
 		>
 			<IconNew classNames="text-xl" />
 		</a>
-		<UserMenu {user} />
+		{#if user?.username || user?.email}
+			<div class="relative">
+				<button
+					onclick={() => (showUserMenu = !showUserMenu)}
+					class="flex size-9 items-center justify-center rounded-full border-2 border-gray-200 bg-indigo-500 text-white shadow-sm transition-all hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600"
+					aria-label="User menu"
+				>
+					{#if user.avatarUrl}
+						<img
+							src={user.avatarUrl}
+							referrerpolicy="no-referrer"
+							class="size-full rounded-full object-cover"
+							alt={user.username || user.email}
+							onerror={(e) => {
+								const target = e.currentTarget as HTMLImageElement;
+								target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username || user.email || "U")}&background=6366f1&color=fff&size=128`;
+							}}
+						/>
+					{:else}
+						<span class="text-lg font-semibold uppercase">
+							{(user.username || user.email || "U")[0]}
+						</span>
+					{/if}
+				</button>
+				{#if showUserMenu}
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<div class="fixed inset-0 z-40" onclick={() => (showUserMenu = false)}></div>
+					<div
+						class="absolute right-0 top-12 z-50 w-64 rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800"
+					>
+						<div class="border-b border-gray-200 p-4 dark:border-gray-700">
+							<div class="flex items-center gap-3">
+								<div
+									class="flex size-12 items-center justify-center rounded-full border-2 border-gray-200 bg-indigo-500 text-white dark:border-gray-700"
+								>
+									{#if user.avatarUrl}
+										<img
+											src={user.avatarUrl}
+											referrerpolicy="no-referrer"
+											class="size-full rounded-full object-cover"
+											alt={user.username || user.email}
+											onerror={(e) => {
+												const target = e.currentTarget as HTMLImageElement;
+												target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username || user.email || "U")}&background=6366f1&color=fff&size=128`;
+											}}
+										/>
+									{:else}
+										<span class="text-xl font-semibold uppercase">
+											{(user.username || user.email || "U")[0]}
+										</span>
+									{/if}
+								</div>
+								<div class="flex-1 overflow-hidden">
+									<p class="truncate font-semibold text-gray-900 dark:text-gray-100">
+										{user.username || user.email}
+									</p>
+									{#if user.email && user.username}
+										<p class="truncate text-xs text-gray-500 dark:text-gray-400">
+											{user.email}
+										</p>
+									{/if}
+									{#if currentDuration}
+										<p class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+											Online: {formatDuration(currentDuration)}
+										</p>
+									{/if}
+								</div>
+							</div>
+						</div>
+						<div class="p-2">
+							<a
+								href="{base}/settings/account"
+								class="flex items-center gap-3 rounded-lg px-3 py-2 text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+								onclick={() => (showUserMenu = false)}
+							>
+								<CarbonUser class="text-lg" />
+								<span>Account</span>
+							</a>
+							<a
+								href="{base}/settings/application"
+								class="flex items-center gap-3 rounded-lg px-3 py-2 text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+								onclick={() => (showUserMenu = false)}
+							>
+								<CarbonSettings class="text-lg" />
+								<span>Settings</span>
+							</a>
+							<hr class="my-1 border-gray-200 dark:border-gray-700" />
+							<button
+								onclick={() => {
+									showUserMenu = false;
+									handleLogout();
+								}}
+								class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+							>
+								<CarbonLogout class="text-lg" />
+								<span>Sign Out</span>
+							</button>
+						</div>
+					</div>
+				{/if}
+			</div>
+		{:else}
+			<button
+				onclick={handleLogin}
+				class="flex size-9 items-center justify-center rounded-full border-2 border-gray-300 bg-gray-100 transition-all hover:border-gray-400 hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:hover:border-gray-500 dark:hover:bg-gray-600"
+				aria-label="Sign in"
+			>
+				<CarbonUser class="text-lg text-gray-600 dark:text-gray-300" />
+			</button>
+		{/if}
 	</div>
 </div>
 
@@ -169,52 +334,76 @@
 		<InfiniteScroll onvisible={handleVisible} />
 	{/if}
 </div>
+
 <div
 	class="flex touch-none flex-col gap-1 rounded-r-xl border border-l-0 border-gray-100 p-3 text-sm dark:border-transparent md:mt-3 md:bg-gradient-to-l md:from-gray-50 md:dark:from-gray-800/30"
 >
-	<!-- User info moved to UserMenu component in top right -->
 	<a
-		href={resolve("/models")}
+		href="{base}/models"
 		class="flex h-9 flex-none items-center gap-1.5 rounded-lg pl-2.5 pr-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
 		onclick={handleNavItemClick}
 	>
 		Models
 		<span
 			class="ml-auto rounded-md bg-gray-500/5 px-1.5 py-0.5 text-xs text-gray-400 dark:bg-gray-500/20 dark:text-gray-400"
-			>{nModels}</span
 		>
+			{nModels}
+		</span>
 	</a>
 
 	<a
-		href={resolve("/gallery")}
+		href="{base}/gallery"
 		class="flex h-9 flex-none items-center gap-1.5 rounded-lg pl-2.5 pr-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
 		onclick={handleNavItemClick}
 	>
-		Gallery
+		<CarbonImage class="text-lg" />
+		<span>Gallery</span>
 	</a>
 
-	<span class="flex gap-1">
-		<a
-			href={resolve("/settings/application")}
-			class="flex h-9 flex-none flex-grow items-center gap-1.5 rounded-lg pl-2.5 pr-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
-			onclick={handleNavItemClick}
-		>
-			Settings
-		</a>
+	<a
+		href="{base}/settings/application"
+		class="flex h-9 flex-none items-center gap-1.5 rounded-lg pl-2.5 pr-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+		onclick={handleNavItemClick}
+	>
+		<CarbonSettings class="text-lg" />
+		<span>Settings</span>
+	</a>
+
+	{#if user?.username || user?.email}
 		<button
-			onclick={() => {
-				switchTheme();
-			}}
-			aria-label="Toggle theme"
-			class="flex size-9 min-w-[1.5em] flex-none items-center justify-center rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+			onclick={() => (showMcpModal = true)}
+			class="flex h-9 flex-none items-center gap-1.5 rounded-lg pl-2.5 pr-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
 		>
-			{#if browser}
-				{#if isDark}
-					<IconSun />
-				{:else}
-					<IconMoon />
-				{/if}
+			<IconMCP classNames="text-[1.05rem]" />
+			<span>MCP Servers</span>
+			{#if $enabledServersCount > 0}
+				<span
+					class="ml-auto rounded-md bg-blue-600/10 px-1.5 py-0.5 text-xs text-blue-600 dark:bg-blue-600/20 dark:text-blue-400"
+				>
+					{$enabledServersCount}
+				</span>
 			{/if}
 		</button>
-	</span>
+	{/if}
+
+	<button
+		onclick={() => {
+			switchTheme();
+		}}
+		aria-label="Toggle theme"
+		class="flex h-9 flex-none items-center gap-1.5 rounded-lg pl-2.5 pr-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+	>
+		{#if browser}
+			{#if isDark}
+				<IconSun />
+			{:else}
+				<IconMoon />
+			{/if}
+		{/if}
+		<span>Theme</span>
+	</button>
 </div>
+
+{#if showMcpModal}
+	<MCPServerManager onclose={() => (showMcpModal = false)} />
+{/if}

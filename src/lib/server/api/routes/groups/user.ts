@@ -6,36 +6,22 @@ import { authCondition } from "$lib/server/auth";
 import { models, validateModel } from "$lib/server/models";
 import { DEFAULT_SETTINGS, type SettingsEditable } from "$lib/types/Settings";
 import { z } from "zod";
+import { config } from "$lib/server/config";
+import { logger } from "$lib/server/logger";
 
 export const userGroup = new Elysia()
 	.use(authPlugin)
-	// Note: /login and /login/callback are handled by SvelteKit routes in src/routes/login/
-	// These API endpoints are not needed for OAuth flow
-	.post("/logout", async ({ cookie, locals }) => {
-		try {
-			// Delete session from database if user is logged in
-			if (locals.sessionId) {
-				await collections.sessions.deleteOne({ sessionId: locals.sessionId });
-			}
-			
-			// Clear session cookie
-			const cookieName = "hf-chat"; // This should match COOKIE_NAME from config
-			if (cookie[cookieName]) {
-				cookie[cookieName].set({
-					value: "",
-					httpOnly: true,
-					secure: true,
-					sameSite: "lax",
-					expires: new Date(0), // Expire immediately
-					path: "/"
-				});
-			}
-			
-			return { success: true, message: "Logged out successfully" };
-		} catch (error) {
-			console.error("Logout error:", error);
-			return { success: false, message: "Logout failed" };
-		}
+	.get("/login", () => {
+		// todo: login
+		throw new Error("Not implemented");
+	})
+	.get("/login/callback", () => {
+		// todo: login callback
+		throw new Error("Not implemented");
+	})
+	.post("/logout", () => {
+		// todo: logout
+		throw new Error("Not implemented");
 	})
 	.group("/user", (app) => {
 		return app
@@ -87,6 +73,8 @@ export const userGroup = new Elysia()
 
 					customPrompts: settings?.customPrompts ?? {},
 					multimodalOverrides: settings?.multimodalOverrides ?? {},
+					toolsOverrides: settings?.toolsOverrides ?? {},
+					billingOrganization: settings?.billingOrganization ?? undefined,
 				};
 			})
 			.post("/settings", async ({ locals, request }) => {
@@ -101,13 +89,13 @@ export const userGroup = new Elysia()
 						activeModel: z.string().default(DEFAULT_SETTINGS.activeModel),
 						customPrompts: z.record(z.string()).default({}),
 						multimodalOverrides: z.record(z.boolean()).default({}),
+						toolsOverrides: z.record(z.boolean()).default({}),
 						disableStream: z.boolean().default(false),
 						directPaste: z.boolean().default(false),
 						hidePromptExamples: z.record(z.boolean()).default({}),
+						billingOrganization: z.string().optional(),
 					})
 					.parse(body) satisfies SettingsEditable;
-
-				// Tools removed: ignore tools updates
 
 				await collections.settings.updateOne(
 					authCondition(locals),
@@ -139,5 +127,79 @@ export const userGroup = new Elysia()
 					})
 					.toArray();
 				return reports;
+			})
+			.get("/billing-orgs", async ({ locals, set }) => {
+				// Only available for HuggingChat
+				if (!config.isHuggingChat) {
+					set.status = 404;
+					return { error: "Not available" };
+				}
+
+				// Requires authenticated user with OAuth token
+				if (!locals.user) {
+					set.status = 401;
+					return { error: "Login required" };
+				}
+
+				if (!locals.token) {
+					set.status = 401;
+					return { error: "OAuth token not available. Please log out and log back in." };
+				}
+
+				try {
+					// Fetch billing info from HuggingFace OAuth userinfo
+					const response = await fetch("https://huggingface.co/oauth/userinfo", {
+						headers: { Authorization: `Bearer ${locals.token}` },
+					});
+
+					if (!response.ok) {
+						logger.error(`Failed to fetch billing orgs: ${response.status}`);
+						set.status = 502;
+						return { error: "Failed to fetch billing information" };
+					}
+
+					const data = await response.json();
+
+					// Get user's current billingOrganization setting
+					const settings = await collections.settings.findOne(authCondition(locals));
+					const currentBillingOrg = settings?.billingOrganization;
+
+					// Filter orgs to only those with canPay: true
+					const billingOrgs = (data.orgs ?? [])
+						.filter((org: { canPay?: boolean }) => org.canPay === true)
+						.map((org: { sub: string; name: string; preferred_username: string }) => ({
+							sub: org.sub,
+							name: org.name,
+							preferred_username: org.preferred_username,
+						}));
+
+					// Check if current billing org is still valid
+					const isCurrentOrgValid =
+						!currentBillingOrg ||
+						billingOrgs.some(
+							(org: { preferred_username: string }) => org.preferred_username === currentBillingOrg
+						);
+
+					// If current billing org is no longer valid, clear it
+					if (!isCurrentOrgValid && currentBillingOrg) {
+						logger.info(
+							`Clearing invalid billingOrganization '${currentBillingOrg}' for user ${locals.user._id}`
+						);
+						await collections.settings.updateOne(authCondition(locals), {
+							$unset: { billingOrganization: "" },
+							$set: { updatedAt: new Date() },
+						});
+					}
+
+					return {
+						userCanPay: data.canPay ?? false,
+						organizations: billingOrgs,
+						currentBillingOrg: isCurrentOrgValid ? currentBillingOrg : undefined,
+					};
+				} catch (err) {
+					logger.error("Error fetching billing orgs:", err);
+					set.status = 500;
+					return { error: "Internal server error" };
+				}
 			});
 	});

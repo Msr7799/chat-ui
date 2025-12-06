@@ -21,6 +21,7 @@ export type GETModelsResponse = Array<{
 	preprompt?: string;
 	multimodal: boolean;
 	multimodalAcceptedMimetypes?: string[];
+	supportsTools?: boolean;
 	unlisted: boolean;
 	hasInferenceAPI: boolean;
 	// Mark router entry for UI decoration — always present
@@ -59,6 +60,7 @@ export const modelGroup = new Elysia().group("/models", (app) =>
 						preprompt: model.preprompt,
 						multimodal: model.multimodal,
 						multimodalAcceptedMimetypes: model.multimodalAcceptedMimetypes,
+						supportsTools: (model as unknown as { supportsTools?: boolean }).supportsTools ?? false,
 						unlisted: model.unlisted,
 						hasInferenceAPI: model.hasInferenceAPI,
 						isRouter: model.isRouter,
@@ -109,7 +111,7 @@ export const modelGroup = new Elysia().group("/models", (app) =>
 		)
 		.group("/:namespace/:model?", (app) =>
 			app
-				.derive(async ({ params }) => {
+				.derive(async ({ params, error }) => {
 					let modelId: string = params.namespace;
 					if (params.model) {
 						modelId += "/" + params.model;
@@ -118,20 +120,20 @@ export const modelGroup = new Elysia().group("/models", (app) =>
 						const { models } = await import("$lib/server/models");
 						const model = models.find((m) => m.id === modelId);
 						if (!model || model.unlisted) {
-							return status(404, "Model not found");
+							return error(404, "Model not found");
 						}
 						return { model };
 					} catch (e) {
-						return status(500, "Models not available");
+						return error(500, "Models not available");
 					}
 				})
 				.get("/", ({ model }) => {
 					return model;
 				})
 				.use(authPlugin)
-				.post("/subscribe", async ({ locals, model }) => {
+				.post("/subscribe", async ({ locals, model, error }) => {
 					if (!locals.sessionId) {
-						return status(401, "Unauthorized");
+						return error(401, "Unauthorized");
 					}
 					await collections.settings.updateOne(
 						authCondition(locals),

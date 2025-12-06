@@ -84,22 +84,20 @@ export async function updateUser(params: {
 	// Dynamically access user data based on NAME_CLAIM from environment
 	// This approach allows us to adapt to different OIDC providers flexibly.
 
-	// ✅ Production: لا نطبع بيانات المستخدم الحساسة في logs
+	// ✅ Production: Don't log sensitive user data
 	logger.info("user login successful");
-	
+
 	// 🔍 Check if avatarUrl is provided
 	if (!avatarUrl) {
 		logger.warn("No avatarUrl (picture) received from OAuth provider - using fallback");
 	}
-	
+
 	// if using huggingface as auth provider, check orgs for earl access and amin rights
 	const isAdmin =
 		(config.HF_ORG_ADMIN && orgs?.some((org) => org.sub === config.HF_ORG_ADMIN)) || false;
 	const isEarlyAccess =
 		(config.HF_ORG_EARLY_ACCESS && orgs?.some((org) => org.sub === config.HF_ORG_EARLY_ACCESS)) ||
 		false;
-
-	// ✅ Removed sensitive user data logging for production
 
 	logger.debug(
 		{
@@ -135,14 +133,16 @@ export async function updateUser(params: {
 		// ✅ Force update avatarUrl even if it exists (to get latest Google photo)
 		await collections.users.updateOne(
 			{ _id: existingUser._id },
-			{ $set: { 
-				username: username || email?.split('@')[0] || name, 
-				name, 
-				avatarUrl: avatarUrl || existingUser.avatarUrl, // Keep old if new one is empty
-				isAdmin, 
-				isEarlyAccess,
-				lastLoginAt: new Date() // ✅ Track Login Time
-			} }
+			{
+				$set: {
+					username: username || email?.split("@")[0] || name,
+					name,
+					avatarUrl: avatarUrl || existingUser.avatarUrl, // Keep old if new one is empty
+					isAdmin,
+					isEarlyAccess,
+					lastLoginAt: new Date(), // ✅ Track Login Time
+				},
+			}
 		);
 
 		// remove previous session if it exists and add new one
@@ -165,7 +165,7 @@ export async function updateUser(params: {
 			_id: new ObjectId(),
 			createdAt: new Date(),
 			updatedAt: new Date(),
-			username: username || email?.split('@')[0] || name,
+			username: username || email?.split("@")[0] || name,
 			name,
 			email,
 			avatarUrl,

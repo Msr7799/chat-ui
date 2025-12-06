@@ -8,8 +8,10 @@
 	import CarbonClose from "~icons/carbon/close";
 	import CarbonTextLongParagraph from "~icons/carbon/text-long-paragraph";
 	import CarbonChevronLeft from "~icons/carbon/chevron-left";
-	import CarbonView from "~icons/carbon/view";
+	import LucideImage from "~icons/lucide/image";
+	import LucideHammer from "~icons/lucide/hammer";
 	import IconGear from "~icons/bi/gear-fill";
+	import CarbonUser from "~icons/carbon/user";
 
 	import type { LayoutData } from "../$types";
 	import { browser } from "$app/environment";
@@ -173,14 +175,25 @@
 						{/if}
 					</div>
 
+					{#if $settings.toolsOverrides?.[model.id] ?? (model as { supportsTools?: boolean }).supportsTools}
+						<span
+							title="Tool calling supported"
+							class="grid size-[21px] flex-none place-items-center rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-500"
+							aria-label="Model supports tools"
+							role="img"
+						>
+							<LucideHammer class="size-3" />
+						</span>
+					{/if}
+
 					{#if $settings.multimodalOverrides?.[model.id] ?? model.multimodal}
 						<span
 							title="Multimodal support (image inputs)"
-							class="grid size-[21px] flex-none place-items-center rounded-md border border-blue-700 dark:border-blue-500"
+							class="grid size-[21px] flex-none place-items-center rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-500"
 							aria-label="Model is multimodal"
 							role="img"
 						>
-							<CarbonView class="text-xxs text-blue-700 dark:text-blue-500" />
+							<LucideImage class="size-3" />
 						</span>
 					{/if}
 
@@ -199,18 +212,39 @@
 				</button>
 			{/each}
 
-			<button
-				type="button"
-				onclick={() => goto(`${base}/settings/application`)}
-				class="group sticky bottom-0 mt-1 flex h-9 w-full flex-none items-center gap-1 rounded-lg px-3 text-[13px] text-gray-600 dark:text-gray-300 max-md:order-first md:rounded-xl md:px-3 {page
-					.url.pathname === `${base}/settings/application`
-					? '!bg-gray-100 !text-gray-800 dark:!bg-gray-700 dark:!text-gray-200'
-					: 'bg-white dark:bg-gray-800'}"
-				aria-label="Configure application settings"
-			>
-				<IconGear class="mr-0.5 text-xxs" />
-				Application Settings
-			</button>
+			<div class="mt-4 space-y-1">
+				<h3
+					class="px-3 pb-1 pt-2 text-xs font-semibold tracking-wide text-gray-600 dark:text-gray-400 md:text-left"
+				>
+					Settings
+				</h3>
+
+				<button
+					type="button"
+					onclick={() => goto(`${base}/settings/account`)}
+					class="group flex h-9 w-full flex-none items-center gap-1 rounded-lg px-3 text-[13px] text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800/60 md:rounded-xl md:px-3 {page
+						.url.pathname === `${base}/settings/account`
+						? '!bg-gray-100 !text-gray-800 dark:!bg-gray-700 dark:!text-gray-200'
+						: ''}"
+					aria-label="Account settings"
+				>
+					<CarbonUser class="mr-0.5 text-xs" />
+					Account
+				</button>
+
+				<button
+					type="button"
+					onclick={() => goto(`${base}/settings/application`)}
+					class="group flex h-9 w-full flex-none items-center gap-1 rounded-lg px-3 text-[13px] text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800/60 md:rounded-xl md:px-3 {page
+						.url.pathname === `${base}/settings/application`
+						? '!bg-gray-100 !text-gray-800 dark:!bg-gray-700 dark:!text-gray-200'
+						: ''}"
+					aria-label="Configure application settings"
+				>
+					<IconGear class="mr-0.5 text-xxs" />
+					Application Settings
+				</button>
+			</div>
 		</div>
 	{/if}
 	{#if showContent}

@@ -22,6 +22,12 @@ export interface Settings extends Timestamps {
 	multimodalOverrides?: Record<string, boolean>;
 
 	/**
+	 * Per‑model overrides to enable tool calling (OpenAI tools/function calling)
+	 * even when not advertised by the provider list. Only `true` is meaningful.
+	 */
+	toolsOverrides?: Record<string, boolean>;
+
+	/**
 	 * Per-model toggle to hide Omni prompt suggestions shown near the composer.
 	 * When set to `true`, prompt examples for that model are suppressed.
 	 */
@@ -29,6 +35,12 @@ export interface Settings extends Timestamps {
 
 	disableStream: boolean;
 	directPaste: boolean;
+
+	/**
+	 * Organization to bill inference requests to (HuggingChat only).
+	 * Stores the org's preferred_username. If empty/undefined, bills to personal account.
+	 */
+	billingOrganization?: string;
 }
 
 export type SettingsEditable = Omit<Settings, "welcomeModalSeenAt" | "createdAt" | "updatedAt">;
@@ -38,6 +50,7 @@ export const DEFAULT_SETTINGS = {
 	activeModel: defaultModel.id,
 	customPrompts: {},
 	multimodalOverrides: {},
+	toolsOverrides: {},
 	hidePromptExamples: {},
 	disableStream: false,
 	directPaste: false,

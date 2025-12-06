@@ -19,6 +19,7 @@ import { refreshConversationStats } from "$lib/jobs/refresh-conversation-stats";
 import { adminTokenManager } from "$lib/server/adminToken";
 import { isHostLocalhost } from "$lib/server/isURLLocal";
 import { MetricsServer } from "$lib/server/metrics";
+import { loadMcpServersOnStartup } from "$lib/server/mcp/registry";
 
 export const init: ServerInit = async () => {
 	// Wait for config to be fully loaded
@@ -48,6 +49,9 @@ export const init: ServerInit = async () => {
 
 		checkAndRunMigrations();
 		refreshConversationStats();
+
+		// Load MCP servers at startup
+		loadMcpServersOnStartup();
 
 		// Init AbortedGenerations refresh process
 		AbortedGenerations.getInstance();
@@ -133,16 +137,41 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	const auth = await authenticateRequest(
 		{ type: "svelte", value: event.request.headers },
-		{ type: "svelte", value: event.cookies }
+		{ type: "svelte", value: event.cookies },
+		event.url
 	);
 
 	event.locals.sessionId = auth.sessionId;
 
-	// ✅ Anonymous Mode: التسجيل اختياري بالكامل
-	// لا نفرض login إلا إذا كان المستخدم يحاول الوصول لصفحة تتطلب مصادقة
-	// (مثل /settings أو /admin) - وحتى في هذه الحالة سيتم التعامل معها في كل route
-	
-	// لا نعمل أي redirect تلقائي هنا - نترك المستخدم يستخدم التطبيق بحرية
+	if (loginEnabled && !auth.user && !event.url.pathname.startsWith(`${base}/.well-known/`)) {
+		if (config.AUTOMATIC_LOGIN === "true") {
+			// AUTOMATIC_LOGIN: always redirect to OAuth flow (unless already on login or healthcheck pages)
+			if (
+				!event.url.pathname.startsWith(`${base}/login`) &&
+				!event.url.pathname.startsWith(`${base}/healthcheck`)
+			) {
+				// To get the same CSRF token after callback
+				refreshSessionCookie(event.cookies, auth.secretSessionId);
+				return await triggerOauthFlow(event);
+			}
+		} else {
+			// Redirect to OAuth flow unless on the authorized pages (home, shared conversation, login, healthcheck, model thumbnails)
+			if (
+				event.url.pathname !== `${base}/` &&
+				event.url.pathname !== `${base}` &&
+				!event.url.pathname.startsWith(`${base}/login`) &&
+				!event.url.pathname.startsWith(`${base}/login/callback`) &&
+				!event.url.pathname.startsWith(`${base}/healthcheck`) &&
+				!event.url.pathname.startsWith(`${base}/r/`) &&
+				!event.url.pathname.startsWith(`${base}/conversation/`) &&
+				!event.url.pathname.startsWith(`${base}/models/`) &&
+				!event.url.pathname.startsWith(`${base}/api`)
+			) {
+				refreshSessionCookie(event.cookies, auth.secretSessionId);
+				return triggerOauthFlow(event);
+			}
+		}
+	}
 
 	event.locals.user = auth.user || undefined;
 	event.locals.token = auth.token;
@@ -192,13 +221,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 		);
 	}
 
-	// ✅ Anonymous Mode: السماح باستخدام التطبيق بدون login
-	// فقط نمنع POST/PUT/DELETE على المسارات المحمية إذا لم يكن المستخدم مسجل دخول
-	// GET يُسمح به - سيتم التعامل معه في كل route على حدة
 	if (
 		loginEnabled &&
 		!event.locals.user &&
-		(event.url.pathname.startsWith(`${base}/admin`)) &&
+		!event.url.pathname.startsWith(`${base}/login`) &&
+		!event.url.pathname.startsWith(`${base}/admin`) &&
+		!event.url.pathname.startsWith(`${base}/settings`) &&
 		!["GET", "OPTIONS", "HEAD"].includes(event.request.method)
 	) {
 		return errorResponse(401, ERROR_MESSAGES.authOnly);

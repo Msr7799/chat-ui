@@ -9,7 +9,9 @@ import { z } from "zod";
 import {
 	MessageUpdateStatus,
 	MessageUpdateType,
+	MessageReasoningUpdateType,
 	type MessageUpdate,
+	type MessageStreamUpdate,
 } from "$lib/types/MessageUpdate";
 import { uploadFile } from "$lib/server/files/uploadFile";
 import { convertLegacyConversation } from "$lib/utils/tree/convertLegacyConversation";
@@ -29,8 +31,12 @@ export async function POST({ request, locals, params, getClientAddress }) {
 	const convId = new ObjectId(id);
 	const promptedAt = new Date();
 
-	// Allow anonymous users - use sessionId if no user is logged in
 	const userId = locals.user?._id ?? locals.sessionId;
+
+	// check user
+	if (!userId) {
+		error(401, "Unauthorized");
+	}
 
 	// check if the user has access to the conversation
 	const convBeforeCheck = await collections.conversations.findOne({
@@ -120,6 +126,8 @@ export async function POST({ request, locals, params, getClientAddress }) {
 		inputs: newPrompt,
 		id: messageId,
 		is_retry: isRetry,
+		selectedMcpServerNames,
+		selectedMcpServers,
 	} = z
 		.object({
 			id: z.string().uuid().refine(isMessageId).optional(), // parent message id to append to for a normal message, or the message id for a retry/continue
@@ -130,6 +138,20 @@ export async function POST({ request, locals, params, getClientAddress }) {
 					.transform((s) => s.replace(/\r\n/g, "\n"))
 			),
 			is_retry: z.optional(z.boolean()),
+			selectedMcpServerNames: z.optional(z.array(z.string())),
+			selectedMcpServers: z
+				.optional(
+					z.array(
+						z.object({
+							name: z.string(),
+							url: z.string(),
+							headers: z
+								.optional(z.array(z.object({ key: z.string(), value: z.string() })))
+								.default([]),
+						})
+					)
+				)
+				.default([]),
 			files: z.optional(
 				z.array(
 					z.object({
@@ -142,6 +164,23 @@ export async function POST({ request, locals, params, getClientAddress }) {
 			),
 		})
 		.parse(JSON.parse(json));
+
+	// Attach MCP selection to locals so the text generation pipeline can consume it
+	try {
+		(locals as unknown as Record<string, unknown>).mcp = {
+			selectedServerNames: selectedMcpServerNames,
+			selectedServers: (selectedMcpServers ?? []).map((s) => ({
+				name: s.name,
+				url: s.url,
+				headers:
+					s.headers && s.headers.length > 0
+						? Object.fromEntries(s.headers.map((h) => [h.key, h.value]))
+						: undefined,
+			})),
+		};
+	} catch {
+		// ignore attachment errors, pipeline will just use env servers
+	}
 
 	const inputFiles = await Promise.all(
 		form
@@ -292,9 +331,27 @@ export async function POST({ request, locals, params, getClientAddress }) {
 	const metricsLabels = { model: metricsModelId };
 
 	const persistConversation = async () => {
+		const messagesForSave = conv.messages.map((msg) => {
+			const filteredUpdates =
+				msg.updates
+					?.filter(
+						(u) =>
+							!(u.type === MessageUpdateType.Status && u.status === MessageUpdateStatus.KeepAlive)
+					)
+					.map((u) => {
+						if (u.type !== MessageUpdateType.Stream) return u;
+						// Preserve existing len if already compressed, otherwise compute from token
+						const len = u.len ?? (u.token ?? "").length;
+						// store a lightweight marker to preserve ordering without duplicating content
+						return { type: MessageUpdateType.Stream, token: "", len } satisfies MessageStreamUpdate;
+					}) ?? [];
+
+			return { ...msg, updates: filteredUpdates };
+		});
+
 		await collections.conversations.updateOne(
 			{ _id: convId },
-			{ $set: { messages: conv.messages, title: conv.title, updatedAt: new Date() } }
+			{ $set: { messages: messagesForSave, title: conv.title, updatedAt: new Date() } }
 		);
 	};
 
@@ -339,6 +396,16 @@ export async function POST({ request, locals, params, getClientAddress }) {
 					lastTokenTimestamp = new Date();
 				}
 
+				// Append reasoning stream tokens to message.reasoning (server-side)
+				else if (
+					event.type === MessageUpdateType.Reasoning &&
+					event.subtype === MessageReasoningUpdateType.Stream &&
+					"token" in event
+				) {
+					messageToWriteTo.reasoning ??= "";
+					messageToWriteTo.reasoning += event.token;
+				}
+
 				// Set the title
 				else if (event.type === MessageUpdateType.Title) {
 					// Always strip <think> markers from titles when saving
@@ -353,7 +420,40 @@ export async function POST({ request, locals, params, getClientAddress }) {
 				// Set the final text and the interrupted flag
 				else if (event.type === MessageUpdateType.FinalAnswer) {
 					messageToWriteTo.interrupted = event.interrupted;
-					messageToWriteTo.content = initialMessageContent + event.text;
+					// Default behavior: replace the streamed text with the provider's final text.
+					// However, when tools (MCP/function calls) were used, providers often stream
+					// some content (e.g., a story) before triggering tools, then return a
+					// different follow‑up message afterwards (e.g., an image caption). Our
+					// previous logic overwrote the pre‑tool content. Preserve it by merging in
+					// the pre‑tool stream when tool updates occurred and the final text does
+					// not already include the streamed prefix.
+					const hadTools = (messageToWriteTo.updates ?? []).some(
+						(u) => u.type === MessageUpdateType.Tool
+					);
+
+					if (hadTools) {
+						const existing = messageToWriteTo.content.slice(initialMessageContent.length);
+						if (existing && existing.length > 0) {
+							// A. If we already streamed the same final text, keep as-is.
+							if (event.text && existing.endsWith(event.text)) {
+								messageToWriteTo.content = initialMessageContent + existing;
+							}
+							// B. If the final text already includes the streamed prefix, use it verbatim.
+							else if (event.text && event.text.startsWith(existing)) {
+								messageToWriteTo.content = initialMessageContent + event.text;
+							}
+							// C. Otherwise, merge with a paragraph break for readability.
+							else {
+								const needsGap = !/\n\n$/.test(existing) && !/^\n/.test(event.text ?? "");
+								messageToWriteTo.content =
+									initialMessageContent + existing + (needsGap ? "\n\n" : "") + (event.text ?? "");
+							}
+						} else {
+							messageToWriteTo.content = initialMessageContent + (event.text ?? "");
+						}
+					} else {
+						messageToWriteTo.content = initialMessageContent + event.text;
+					}
 					finalAnswerReceived = true;
 
 					if (metricsEnabled && metrics) {
@@ -389,15 +489,16 @@ export async function POST({ request, locals, params, getClientAddress }) {
 					}
 				}
 
-				// Append to the persistent message updates if it's not a stream update
+				// Append updates for audit/replay (streams too, to preserve ordering)
 				if (
-					event.type !== MessageUpdateType.Stream &&
 					!(
 						event.type === MessageUpdateType.Status &&
 						event.status === MessageUpdateStatus.KeepAlive
 					)
 				) {
-					messageToWriteTo?.updates?.push(event);
+					messageToWriteTo?.updates?.push(
+						event.type === MessageUpdateType.Stream ? { ...event } : event
+					);
 				}
 
 				// Avoid remote keylogging attack executed by watching packet lengths
@@ -436,6 +537,12 @@ export async function POST({ request, locals, params, getClientAddress }) {
 			const initialMessageContent = messageToWriteTo.content;
 
 			try {
+				// Fetch user settings once for all overrides and billing org
+				const userSettings = await collections.settings.findOne(authCondition(locals));
+
+				// Add billing organization to locals for the endpoint to use
+				locals.billingOrganization = userSettings?.billingOrganization;
+
 				const ctx: TextGenerationContext = {
 					model,
 					endpoint: await model.getEndpoint(),
@@ -446,11 +553,9 @@ export async function POST({ request, locals, params, getClientAddress }) {
 					ip: getClientAddress(),
 					username: locals.user?.username,
 					// Force-enable multimodal if user settings say so for this model
-					forceMultimodal: Boolean(
-						(await collections.settings.findOne(authCondition(locals)))?.multimodalOverrides?.[
-							model.id
-						]
-					),
+					forceMultimodal: Boolean(userSettings?.multimodalOverrides?.[model.id]),
+					// Force-enable tools if user settings say so for this model
+					forceTools: Boolean(userSettings?.toolsOverrides?.[model.id]),
 					locals,
 					abortController: ctrl,
 				};
@@ -502,6 +607,17 @@ export async function POST({ request, locals, params, getClientAddress }) {
 			} finally {
 				// check if no output was generated
 				if (!hasError && !abortedByUser && messageToWriteTo.content === initialMessageContent) {
+					logger.warn(
+						{
+							conversationId: conversationKey,
+							updatesCount: messageToWriteTo.updates?.length ?? 0,
+							filesCount: messageToWriteTo.files?.length ?? 0,
+							reasoningLen: messageToWriteTo.reasoning?.length ?? 0,
+							initialLen: initialMessageContent.length,
+							finalLen: messageToWriteTo.content.length,
+						},
+						"No output generated after streaming; emitting error status"
+					);
 					await update({
 						type: MessageUpdateType.Status,
 						status: MessageUpdateStatus.Error,

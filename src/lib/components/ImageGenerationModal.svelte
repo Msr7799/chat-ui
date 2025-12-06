@@ -61,17 +61,23 @@
 </script>
 
 {#if open}
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<div
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
 		role="dialog"
 		aria-modal="true"
+		tabindex="-1"
 		onclick={closeModal}
 		onkeydown={handleKeydown}
 	>
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<div
 			class="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl dark:bg-gray-900"
 			onclick={(e) => e.stopPropagation()}
 			role="document"
+			tabindex="0"
 		>
 			<!-- Header -->
 			<div

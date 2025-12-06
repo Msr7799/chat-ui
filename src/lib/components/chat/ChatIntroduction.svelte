@@ -23,7 +23,8 @@
 	<div
 		class="flex -translate-y-16 select-none items-center rounded-xl text-3xl font-semibold md:-translate-y-12 md:text-5xl"
 	>
-		<Logo classNames="size-12 md:size-20 dark:invert mr-0.5" />
+		<!-- أيقونة أكبر قليلاً على الديسكتوب مع الحفاظ على الحجم الحالي في الشاشات الصغيرة -->
+		<Logo classNames="size-24 md:size-36 dark:invert mr-0.5" />
 		{publicConfig.PUBLIC_APP_NAME}
 	</div>
 	<!-- <div class="lg:col-span-1">

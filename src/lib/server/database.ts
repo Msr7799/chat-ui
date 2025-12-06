@@ -12,12 +12,12 @@ import type { ConversationStats } from "$lib/types/ConversationStats";
 import type { MigrationResult } from "$lib/types/MigrationResult";
 import type { Semaphore } from "$lib/types/Semaphore";
 import type { AssistantStats } from "$lib/types/AssistantStats";
+import type { GeneratedImage } from "$lib/types/GeneratedImage";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import { logger } from "$lib/server/logger";
 import { building } from "$app/environment";
 import type { TokenCache } from "$lib/types/TokenCache";
 import { onExit } from "./exitHandler";
-import type { GeneratedImage } from "$lib/types/GeneratedImage";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { existsSync, mkdirSync } from "fs";
@@ -293,11 +293,7 @@ export class Database {
 
 		config.createIndex({ key: 1 }, { unique: true }).catch((e) => logger.error(e));
 
-		// Generated images indexes
 		generatedImages.createIndex({ userId: 1, createdAt: -1 }).catch((e) => logger.error(e));
-		generatedImages
-			.createIndex({ cloudinaryPublicId: 1 }, { unique: true })
-			.catch((e) => logger.error(e));
 	}
 }
 

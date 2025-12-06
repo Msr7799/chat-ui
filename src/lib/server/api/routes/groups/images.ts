@@ -1,11 +1,10 @@
-import { Elysia, status } from "elysia";
-import { authPlugin } from "../../authPlugin";
+import { Elysia, t } from "elysia";
+import { authPlugin } from "$api/authPlugin";
 import { collections } from "$lib/server/database";
 import { uploadImageToCloudinary, deleteImageFromCloudinary } from "$lib/server/cloudinary";
 import { ObjectId } from "mongodb";
 import { config } from "$lib/server/config";
 import { logger } from "$lib/server/logger";
-import { getApiToken } from "$lib/server/apiToken";
 import { HfInference } from "@huggingface/inference";
 
 const FLUX_MODEL_ID = "black-forest-labs/FLUX.1-schnell";
@@ -13,36 +12,30 @@ const FLUX_MODEL_ID = "black-forest-labs/FLUX.1-schnell";
 export const imageGroup = new Elysia().group("/images", (app) =>
 	app
 		.use(authPlugin)
-		.post("/generate", async ({ locals, body }) => {
-			// ✅ لا نحتاج Google OAuth - فقط HF token
-			// Image generation متاح للجميع باستخدام HF token من .env
-			
+		.post("/generate", async ({ locals, body, set }) => {
 			const { prompt } = body as { prompt: string };
 
 			if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
-				throw status(400, "Prompt is required");
+				set.status = 400;
+				return { error: "Prompt is required" };
 			}
 
 			if (prompt.length > 500) {
-				throw status(400, "Prompt is too long (max 500 characters)");
+				set.status = 400;
+				return { error: "Prompt is too long (max 500 characters)" };
 			}
 
 			try {
-				// ✅ استخدام HF token من .env (ليس Google OAuth)
 				const apiToken = config.OPENAI_API_KEY || config.HF_TOKEN;
 
 				if (!apiToken) {
 					throw new Error("HF_TOKEN not configured in .env");
 				}
 
-				logger.info(
-					{ model: FLUX_MODEL_ID },
-					"Generating image with FLUX"
-				);
+				logger.info({ model: FLUX_MODEL_ID }, "Generating image with FLUX");
 
-				// ✅ استخدام @huggingface/inference SDK
 				const hf = new HfInference(apiToken);
-				
+
 				const imageBlob = (await hf.textToImage({
 					model: FLUX_MODEL_ID,
 					inputs: prompt.trim(),
@@ -56,7 +49,7 @@ export const imageGroup = new Elysia().group("/images", (app) =>
 				if (locals.user) {
 					tags.push(locals.user._id.toString());
 				}
-				
+
 				const cloudinaryResult = await uploadImageToCloudinary(imageBuffer, {
 					folder: "chat-ui/generated-images",
 					tags,
@@ -65,7 +58,7 @@ export const imageGroup = new Elysia().group("/images", (app) =>
 				// Save to MongoDB (if user is logged in)
 				let generatedImageId = new ObjectId();
 				if (locals.user) {
-					const generatedImage = await collections.generatedImages.insertOne({
+					await collections.generatedImages.insertOne({
 						_id: generatedImageId,
 						userId: locals.user._id,
 						prompt: prompt.trim(),
@@ -96,13 +89,15 @@ export const imageGroup = new Elysia().group("/images", (app) =>
 				};
 			} catch (error) {
 				logger.error({ error: String(error) }, "Image generation failed");
-				throw status(500, `Failed to generate image: ${error}`);
+				set.status = 500;
+				return { error: `Failed to generate image: ${error}` };
 			}
 		})
-		.get("/", async ({ locals, query }) => {
+		.get("/", async ({ locals, query, set }) => {
 			// Check authentication
 			if (!locals.user) {
-				throw status(401, "Authentication required");
+				set.status = 401;
+				return { error: "Authentication required" };
 			}
 
 			const page = parseInt((query.page as string) || "0", 10);
@@ -139,19 +134,22 @@ export const imageGroup = new Elysia().group("/images", (app) =>
 				};
 			} catch (error) {
 				logger.error({ error: String(error) }, "Failed to fetch images");
-				throw status(500, "Failed to fetch images");
+				set.status = 500;
+				return { error: "Failed to fetch images" };
 			}
 		})
-		.delete("/:imageId", async ({ locals, params }) => {
+		.delete("/:imageId", async ({ locals, params, set }) => {
 			// Check authentication
 			if (!locals.user) {
-				throw status(401, "Authentication required");
+				set.status = 401;
+				return { error: "Authentication required" };
 			}
 
 			const imageId = params.imageId;
 
 			if (!ObjectId.isValid(imageId)) {
-				throw status(400, "Invalid image ID");
+				set.status = 400;
+				return { error: "Invalid image ID" };
 			}
 
 			try {
@@ -161,7 +159,8 @@ export const imageGroup = new Elysia().group("/images", (app) =>
 				});
 
 				if (!image) {
-					throw status(404, "Image not found");
+					set.status = 404;
+					return { error: "Image not found" };
 				}
 
 				// Delete from Cloudinary
@@ -177,7 +176,8 @@ export const imageGroup = new Elysia().group("/images", (app) =>
 				return { success: true };
 			} catch (error) {
 				logger.error({ error: String(error) }, "Failed to delete image");
-				throw status(500, "Failed to delete image");
+				set.status = 500;
+				return { error: "Failed to delete image" };
 			}
 		})
 );

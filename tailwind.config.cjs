@@ -9,13 +9,8 @@ module.exports = {
 	theme: {
 		extend: {
 			colors: {
-				gray: {
-					600: "#323843",
-					700: "#252a33",
-					800: "#1b1f27",
-					900: "#12151c",
-					950: "#07090d",
-				},
+				// استخدم لوحة neutral بدل gray لكل درجات الرمادي في الواجهة
+				gray: colors.neutral,
 			},
 			fontSize: {
 				xxs: "0.625rem",

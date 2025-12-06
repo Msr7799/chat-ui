@@ -38,8 +38,9 @@ ingressInternal:
 envVars:
   TEST: "test"
   COUPLE_SESSION_WITH_COOKIE_NAME: "token"
-  OPENID_SCOPES: "openid profile inference-api"
+  OPENID_SCOPES: "openid profile inference-api read-mcp read-billing"
   USE_USER_TOKEN: "true"
+  MCP_FORWARD_HF_USER_TOKEN: "true"
   AUTOMATIC_LOGIN: "false"
 
   ADDRESS_HEADER: "X-Forwarded-For"
@@ -66,12 +67,34 @@ envVars:
   LLM_ROUTER_OTHER_ROUTE: "casual_conversation"
   LLM_ROUTER_ARCH_TIMEOUT_MS: "10000"
   LLM_ROUTER_ENABLE_MULTIMODAL: "true"
-  LLM_ROUTER_MULTIMODAL_MODEL: "Qwen/Qwen3-VL-235B-A22B-Thinking"
+  LLM_ROUTER_MULTIMODAL_MODEL: "Qwen/Qwen3-VL-235B-A22B-Instruct"
+  LLM_ROUTER_ENABLE_TOOLS: "true"
+  LLM_ROUTER_TOOLS_MODEL: "moonshotai/Kimi-K2-Instruct-0905"
+  TRANSCRIPTION_MODEL: "openai/whisper-large-v3-turbo"
+  MCP_SERVERS: >
+    [{"name": "Web Search (Exa)", "url": "https://mcp.exa.ai/mcp"}, {"name": "Hugging Face", "url": "https://hf.co/mcp?login"}]
   PUBLIC_LLM_ROUTER_DISPLAY_NAME: "Omni"
   PUBLIC_LLM_ROUTER_LOGO_URL: "https://cdn-uploads.huggingface.co/production/uploads/5f17f0a0925b9863e28ad517/C5V0v1xZXv6M7FXsdJH9b.png"
   PUBLIC_LLM_ROUTER_ALIAS_ID: "omni"
   MODELS: > 
     [
+      { "id": "MiniMaxAI/MiniMax-M2", "description": "Compact MoE model tuned for fast coding, agentic workflows, and long-context chat." },
+      { "id": "PrimeIntellect/INTELLECT-3-FP8", "description": "FP8 INTELLECT-3 variant for cheaper frontier-level math, code, and general reasoning." },
+      { "id": "Qwen/Qwen3-VL-30B-A3B-Instruct", "description": "Flagship Qwen3 vision-language model for high-accuracy image, text, and video reasoning." },
+      { "id": "Qwen/Qwen3-VL-30B-A3B-Thinking", "description": "Thinking-mode Qwen3-VL that emits detailed multimodal reasoning traces for difficult problems." },
+      { "id": "Qwen/Qwen3-VL-8B-Instruct", "description": "Smaller Qwen3 vision-language assistant for everyday multimodal chat, captioning, and analysis." },
+      { "id": "aisingapore/Qwen-SEA-LION-v4-32B-IT", "description": "SEA-LION v4 Qwen optimized for Southeast Asian languages and regional enterprise workloads." },
+      { "id": "allenai/Olmo-3-32B-Think", "description": "Fully open 32B thinking model excelling at stepwise math, coding, and research reasoning." },
+      { "id": "allenai/Olmo-3-7B-Instruct", "description": "Lightweight Olmo assistant for instruction following, Q&A, and everyday open-source workflows." },
+      { "id": "allenai/Olmo-3-7B-Think", "description": "7B Olmo reasoning model delivering transparent multi-step thinking on modest hardware." },
+      { "id": "deepcogito/cogito-671b-v2.1", "description": "Frontier-scale 671B MoE focused on deep reasoning, math proofs, and complex coding." },
+      { "id": "deepcogito/cogito-671b-v2.1-FP8", "description": "FP8 Cogito v2.1 making 671B-scale reasoning more affordable to serve and experiment with." },
+      { "id": "deepseek-ai/DeepSeek-V3.2", "description": "Latest DeepSeek agent model combining strong reasoning, tool-use, and efficient long-context inference." },
+      { "id": "moonshotai/Kimi-K2-Thinking", "description": "Reasoning-focused Kimi K2 variant for deep chain-of-thought and large agentic tool flows." },
+      { "id": "nvidia/NVIDIA-Nemotron-Nano-12B-v2", "description": "NVIDIA Nano 12B general assistant for coding, chat, and agents with efficient deployment." },
+      { "id": "openai/gpt-oss-safeguard-20b", "description": "Safety-focused gpt-oss variant for content classification, policy enforcement, and LLM output filtering." },
+      { "id": "zai-org/GLM-4.5", "description": "Flagship GLM agent model unifying advanced reasoning, coding, and tool-using capabilities." },
+      { "id": "zai-org/GLM-4.5V-FP8", "description": "FP8 vision-language GLM-4.5V for efficient multilingual visual QA, understanding, and hybrid reasoning." },    
       { "id": "deepseek-ai/DeepSeek-V3.2-Exp", "description": "Experimental V3.2 release focused on faster, lower-cost inference with strong general reasoning and tool use." },
       { "id": "zai-org/GLM-4.6", "description": "Next-gen GLM with very long context and solid multilingual reasoning; good for agents and tools." },
       { "id": "Kwaipilot/KAT-Dev", "description": "Developer-oriented assistant tuned for coding, debugging, and lightweight agent workflows." },

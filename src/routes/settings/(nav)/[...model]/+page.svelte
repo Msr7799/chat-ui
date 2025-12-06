@@ -19,6 +19,46 @@
 	const publicConfig = usePublicConfig();
 	const settings = useSettingsStore();
 
+	// Functional bindings for nested settings (Svelte 5):
+	// Avoid binding directly to $settings.*[modelId]; write via store update
+	function getToolsOverride() {
+		return $settings.toolsOverrides?.[page.params.model] ?? false;
+	}
+	function setToolsOverride(v: boolean) {
+		settings.update((s) => ({
+			...s,
+			toolsOverrides: { ...s.toolsOverrides, [page.params.model]: v },
+		}));
+	}
+	function getMultimodalOverride() {
+		return $settings.multimodalOverrides?.[page.params.model] ?? false;
+	}
+	function setMultimodalOverride(v: boolean) {
+		settings.update((s) => ({
+			...s,
+			multimodalOverrides: { ...s.multimodalOverrides, [page.params.model]: v },
+		}));
+	}
+	function getHidePromptExamples() {
+		return $settings.hidePromptExamples?.[page.params.model] ?? false;
+	}
+	function setHidePromptExamples(v: boolean) {
+		settings.update((s) => ({
+			...s,
+			hidePromptExamples: { ...s.hidePromptExamples, [page.params.model]: v },
+		}));
+	}
+
+	function getCustomPrompt() {
+		return $settings.customPrompts?.[page.params.model] ?? "";
+	}
+	function setCustomPrompt(v: string) {
+		settings.update((s) => ({
+			...s,
+			customPrompts: { ...s.customPrompts, [page.params.model]: v },
+		}));
+	}
+
 	type RouterProvider = { provider: string } & Record<string, unknown>;
 
 	$effect(() => {
@@ -40,6 +80,17 @@
 		if (model) {
 			// Default to the model's advertised capability
 			settings.initValue("multimodalOverrides", page.params.model, !!model.multimodal);
+		}
+	});
+
+	// Initialize tools override for this model if not set yet
+	$effect(() => {
+		if (model) {
+			settings.initValue(
+				"toolsOverrides",
+				page.params.model,
+				Boolean((model as unknown as { supportsTools?: boolean }).supportsTools)
+			);
 		}
 	});
 
@@ -141,7 +192,7 @@
 				classNames="inline-flex items-center rounded-full border border-gray-200 px-2.5 py-1 text-sm hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700/60"
 			>
 				<div class="flex items-center gap-1.5">
-					<CarbonCopy class="shrink-0 text-xs" />Copy new chat link
+					<CarbonCopy class="shrink-0 text-xs" />Copy direct link
 				</div>
 			</CopyToClipBoardBtn>
 		{/if}
@@ -161,7 +212,10 @@
 					class="ml-auto text-xs underline decoration-gray-300 hover:decoration-gray-700 dark:decoration-gray-700 dark:hover:decoration-gray-400"
 					onclick={(e) => {
 						e.stopPropagation();
-						$settings.customPrompts[page.params.model] = model.preprompt;
+						settings.update((s) => ({
+							...s,
+							customPrompts: { ...s.customPrompts, [page.params.model]: model.preprompt },
+						}));
 					}}
 				>
 					Reset
@@ -173,13 +227,25 @@
 			aria-label="Custom system prompt"
 			rows="8"
 			class="w-full resize-none rounded-md border border-gray-200 bg-gray-50 p-2 text-[13px] dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
-			bind:value={$settings.customPrompts[page.params.model]}
+			bind:value={getCustomPrompt, setCustomPrompt}
 		></textarea>
 		<!-- Capabilities -->
 		<div
 			class="mt-3 rounded-xl border border-gray-200 bg-white px-3 shadow-sm dark:border-gray-700 dark:bg-gray-800"
 		>
 			<div class="divide-y divide-gray-200 dark:divide-gray-700">
+				<div class="flex items-start justify-between py-3">
+					<div>
+						<div class="text-[13px] font-medium text-gray-800 dark:text-gray-200">
+							Tool calling (functions)
+						</div>
+						<p class="text-[12px] text-gray-500 dark:text-gray-400">
+							Enable tools and allow the model to call them in chat.
+						</p>
+					</div>
+					<Switch name="forceTools" bind:checked={getToolsOverride, setToolsOverride} />
+				</div>
+
 				<div class="flex items-start justify-between py-3">
 					<div>
 						<div class="text-[13px] font-medium text-gray-800 dark:text-gray-200">
@@ -191,7 +257,7 @@
 					</div>
 					<Switch
 						name="forceMultimodal"
-						bind:checked={$settings.multimodalOverrides[page.params.model]}
+						bind:checked={getMultimodalOverride, setMultimodalOverride}
 					/>
 				</div>
 
@@ -207,7 +273,7 @@
 						</div>
 						<Switch
 							name="hidePromptExamples"
-							bind:checked={$settings.hidePromptExamples[page.params.model]}
+							bind:checked={getHidePromptExamples, setHidePromptExamples}
 						/>
 					</div>
 				{/if}
@@ -239,7 +305,7 @@
 							>
 								{#if hubOrg}
 									<img
-										src="https://huggingface.co/api/organizations/{hubOrg}/avatar"
+										src="https://huggingface.co/api/avatars/{hubOrg}"
 										alt="{prov.provider} logo"
 										class="size-2.5 flex-none rounded-sm"
 										onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}

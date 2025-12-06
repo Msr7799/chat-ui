@@ -10,8 +10,11 @@
 	let { classNames = "" }: Props = $props();
 </script>
 
+<!-- استخدام واحد للّوجو مع التحكم الكامل بالحجم/الألوان عبر classNames من الخارج -->
 <img
+	width="60"
+	height="40"
 	class={classNames}
 	alt="{publicConfig.PUBLIC_APP_NAME} logo"
-	src="{publicConfig.assetPath}/logo.svg"
+	src="/chatui-new/light/logo.svg"
 />
