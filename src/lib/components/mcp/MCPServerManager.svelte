@@ -90,7 +90,13 @@
 	}
 </script>
 
-<Modal width={currentView === "list" ? "w-[800px]" : "w-[600px]"} {onclose} closeButton>
+<Modal
+	width={currentView === "list"
+		? "w-full max-w-[800px] sm:w-[600px] md:w-[800px]"
+		: "w-full max-w-[600px] sm:w-[500px] md:w-[600px]"}
+	{onclose}
+	closeButton
+>
 	<div class="p-6">
 		<!-- Header -->
 		<div class="mb-6">
@@ -139,7 +145,7 @@
 					</div>
 				</div>
 
-				<div class="flex gap-2">
+				<div class="flex w-full flex-wrap justify-end gap-2">
 					<button
 						onclick={handleRefresh}
 						disabled={isRefreshing}
