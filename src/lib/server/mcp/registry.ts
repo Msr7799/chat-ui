@@ -2,6 +2,8 @@ import { config } from "$lib/server/config";
 import { logger } from "$lib/server/logger";
 import type { McpServerConfig } from "./httpClient";
 import { resetMcpToolsCache } from "./tools";
+import type { UnifiedMcpServer } from "./types";
+import { getLocalMcpClients } from "./localRegistry";
 
 let cachedRaw: string | null = null;
 let cachedServers: McpServerConfig[] = [];
@@ -73,4 +75,33 @@ export function getMcpServers(): McpServerConfig[] {
 		loadMcpServersOnStartup();
 	}
 	return cachedServers;
+}
+
+/**
+ * Get all MCP servers (both remote and local) as unified server objects
+ */
+export function getAllMcpServers(): UnifiedMcpServer[] {
+	const unified: UnifiedMcpServer[] = [];
+
+	// Add remote servers
+	const remoteServers = getMcpServers();
+	for (const server of remoteServers) {
+		unified.push({
+			type: "remote",
+			name: server.name,
+			config: server,
+		});
+	}
+
+	// Add local servers
+	const localClients = getLocalMcpClients();
+	for (const [name, client] of localClients.entries()) {
+		unified.push({
+			type: "local",
+			name,
+			config: client["config"], // Access private config property
+		});
+	}
+
+	return unified;
 }

@@ -8,6 +8,7 @@ import type { McpToolMapping } from "$lib/server/mcp/tools";
 import type { McpServerConfig } from "$lib/server/mcp/httpClient";
 import { callMcpTool, type McpToolTextResponse } from "$lib/server/mcp/httpClient";
 import { getClient } from "$lib/server/mcp/clientPool";
+import { callLocalMcpTool } from "$lib/server/mcp/localRegistry";
 import { attachFileRefsToArgs, type FileRefResolver } from "./fileRefs";
 import type { Client } from "@modelcontextprotocol/sdk/client";
 
@@ -121,9 +122,14 @@ export async function* executeToolCalls({
 		};
 	}
 
-	// Preload clients per distinct server used in this batch
+	// Preload HTTP clients per distinct **remote** server used in this batch
 	const distinctServerNames = Array.from(
-		new Set(prepared.map((p) => mapping[p.call.name]?.server).filter(Boolean) as string[])
+		new Set(
+			prepared
+				.map((p) => mapping[p.call.name])
+				.filter((m) => m && !m.isLocal)
+				.map((m) => m.server) as string[]
+		)
 	);
 	const clientMap = new Map<string, Client>();
 	await Promise.all(
@@ -187,7 +193,8 @@ export async function* executeToolCalls({
 			return;
 		}
 		const serverCfg = serverLookup.get(mappingEntry.server);
-		if (!serverCfg) {
+		const isLocal = Boolean(mappingEntry.isLocal);
+		if (!isLocal && !serverCfg) {
 			q.push({
 				index,
 				error: `Unknown MCP server: ${mappingEntry.server}`,
@@ -196,22 +203,22 @@ export async function* executeToolCalls({
 			});
 			return;
 		}
-		const client = clientMap.get(mappingEntry.server);
+		const client = isLocal ? undefined : clientMap.get(mappingEntry.server);
 		try {
 			logger.debug(
 				{ server: mappingEntry.server, tool: mappingEntry.tool, parameters: p.paramsClean },
 				"[mcp] invoking tool"
 			);
-			const toolResponse: McpToolTextResponse = await callMcpTool(
-				serverCfg,
-				mappingEntry.tool,
-				p.argsObj,
-				{
-					client,
-					signal: abortSignal,
-					timeoutMs: toolTimeoutMs,
-				}
-			);
+			const toolResponse: McpToolTextResponse = isLocal
+				? await callLocalMcpTool(mappingEntry.server, mappingEntry.tool, p.argsObj, {
+						signal: abortSignal,
+						timeoutMs: toolTimeoutMs,
+					})
+				: await callMcpTool(serverCfg as McpServerConfig, mappingEntry.tool, p.argsObj, {
+						client,
+						signal: abortSignal,
+						timeoutMs: toolTimeoutMs,
+					});
 			const { annotated } = processToolOutput(toolResponse.text ?? "");
 			logger.debug(
 				{ server: mappingEntry.server, tool: mappingEntry.tool },

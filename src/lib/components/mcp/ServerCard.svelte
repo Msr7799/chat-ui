@@ -1,6 +1,11 @@
 <script lang="ts">
 	import type { MCPServer } from "$lib/types/Tool";
-	import { toggleServer, healthCheckServer, deleteCustomServer } from "$lib/stores/mcpServers";
+	import {
+		toggleServer,
+		healthCheckServer,
+		deleteCustomServer,
+		deleteLocalBaseServer,
+	} from "$lib/stores/mcpServers";
 	import IconCheckmark from "~icons/carbon/checkmark-filled";
 	import IconWarning from "~icons/carbon/warning-filled";
 	import IconPending from "~icons/carbon/pending-filled";
@@ -75,7 +80,12 @@
 	}
 
 	function handleDelete() {
-		deleteCustomServer(server.id);
+		if (server.type === "custom") {
+			deleteCustomServer(server.id);
+		} else if (server.id.startsWith("local-")) {
+			const name = server.id.slice("local-".length) || server.name;
+			deleteLocalBaseServer(name);
+		}
 	}
 </script>
 
@@ -170,7 +180,7 @@
 				</a>
 			{/if}
 
-			{#if server.type === "custom"}
+			{#if server.type === "custom" || server.id.startsWith("local-")}
 				<button
 					onclick={handleDelete}
 					class="flex items-center gap-1.5 rounded-lg border border-red-500/15 bg-red-50 px-2.5 py-[.29rem] text-xs font-medium text-red-600 hover:bg-red-100 dark:border-red-500/25 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50"

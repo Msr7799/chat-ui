@@ -89,9 +89,11 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="flex h-full flex-col">
+<div class="flex h-screen max-h-screen flex-col overflow-hidden">
 	<!-- Header -->
-	<div class="border-b border-gray-200 bg-white px-6 py-4 dark:border-gray-800 dark:bg-gray-900">
+	<div
+		class="flex-shrink-0 border-b border-gray-200 bg-white px-6 py-4 dark:border-gray-800 dark:bg-gray-900"
+	>
 		<div class="flex items-center justify-between">
 			<div>
 				<h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Image Gallery</h1>
@@ -113,7 +115,7 @@
 	</div>
 
 	<!-- Content -->
-	<div class="flex-1 overflow-y-auto p-6">
+	<div class="flex-1 overflow-y-auto overflow-x-hidden p-6">
 		{#if loading}
 			<div class="flex h-64 items-center justify-center">
 				<IconLoading />
@@ -128,9 +130,7 @@
 			<div class="flex h-64 flex-col items-center justify-center text-gray-500 dark:text-gray-400">
 				<CarbonImage class="mb-4 text-6xl opacity-50" />
 				<p class="text-lg font-medium">No images yet</p>
-				<p class="mt-2 text-sm">
-					Click "Generate New" to create your first AI image
-				</p>
+				<p class="mt-2 text-sm">Click "Generate New" to create your first AI image</p>
 			</div>
 		{:else}
 			<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -154,37 +154,46 @@
 
 						<!-- Overlay on hover -->
 						<div
-							class="absolute inset-0 flex items-center justify-center gap-2 bg-black/60 opacity-0 transition-opacity group-hover:opacity-100"
+							class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 opacity-0 transition-opacity group-hover:opacity-100"
 						>
-							<button
-								type="button"
-								class="rounded-lg bg-white p-2 text-gray-900 transition-transform hover:scale-110"
-								onclick={() => openImageFullscreen(image)}
-								aria-label="View fullscreen"
-							>
-								<CarbonImage class="text-xl" />
-							</button>
-							<a
-								href={image.url}
-								download="generated-image.png"
-								class="rounded-lg bg-white p-2 text-gray-900 transition-transform hover:scale-110"
-								aria-label="Download"
-							>
-								<CarbonDownload class="text-xl" />
-							</a>
-							<button
-								type="button"
-								class="rounded-lg bg-red-600 p-2 text-white transition-transform hover:scale-110"
-								onclick={() => deleteImage(image._id)}
-								disabled={deletingId === image._id}
-								aria-label="Delete"
-							>
-								{#if deletingId === image._id}
-									<IconLoading />
-								{:else}
-									<CarbonTrash class="text-xl" />
-								{/if}
-							</button>
+							<div class="flex gap-2">
+								<button
+									type="button"
+									class="rounded-lg bg-white p-2 text-gray-900 transition-transform hover:scale-110"
+									onclick={() => openImageFullscreen(image)}
+									aria-label="View fullscreen"
+								>
+									<CarbonImage class="text-xl" />
+								</button>
+								<a
+									href={image.url}
+									download="generated-image.png"
+									class="rounded-lg bg-white p-2 text-gray-900 transition-transform hover:scale-110"
+									aria-label="Download"
+								>
+									<CarbonDownload class="text-xl" />
+								</a>
+								<button
+									type="button"
+									class="rounded-lg bg-red-600 p-2 text-white transition-transform hover:scale-110"
+									onclick={() => deleteImage(image._id)}
+									disabled={deletingId === image._id}
+									aria-label="Delete"
+								>
+									{#if deletingId === image._id}
+										<IconLoading />
+									{:else}
+										<CarbonTrash class="text-xl" />
+									{/if}
+								</button>
+							</div>
+							<div class="mt-2 px-4 text-center">
+								<span
+									class="inline-block rounded-full bg-black/50 px-2 py-1 text-xs text-white backdrop-blur-sm"
+								>
+									{image.modelUsed || "FLUX.1-schnell"}
+								</span>
+							</div>
 						</div>
 
 						<!-- Info -->
@@ -192,9 +201,14 @@
 							<p class="line-clamp-2 text-sm text-gray-700 dark:text-gray-300">
 								{image.prompt}
 							</p>
-							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-								{new Date(image.createdAt).toLocaleDateString()}
-							</p>
+							<div
+								class="mt-2 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400"
+							>
+								<span>{new Date(image.createdAt).toLocaleDateString()}</span>
+								<span class="truncate pl-2" title={image.modelUsed}>
+									{image.modelUsed ? image.modelUsed.split("/").pop() : "FLUX.1-schnell"}
+								</span>
+							</div>
 						</div>
 					</div>
 				{/each}
@@ -260,7 +274,7 @@
 {/if}
 
 <!-- Image Generation Modal -->
-<ImageGenerationModal bind:open={isModalOpen} onImageGenerated={onImageGenerated} />
+<ImageGenerationModal bind:open={isModalOpen} {onImageGenerated} />
 
 <style>
 	.line-clamp-2 {

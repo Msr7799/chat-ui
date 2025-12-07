@@ -3,6 +3,7 @@
 	import Modal from "$lib/components/Modal.svelte";
 	import ServerCard from "./ServerCard.svelte";
 	import AddServerForm from "./AddServerForm.svelte";
+	import ImportConfigForm from "./ImportConfigForm.svelte";
 	import {
 		allMcpServers,
 		selectedServerIds,
@@ -14,8 +15,10 @@
 	import type { KeyValuePair } from "$lib/types/Tool";
 	import IconAddLarge from "~icons/carbon/add-large";
 	import IconRefresh from "~icons/carbon/renew";
+	import IconUpload from "~icons/carbon/upload";
 	import LucideHammer from "~icons/lucide/hammer";
 	import IconMCP from "$lib/components/icons/IconMCP.svelte";
+	import { base } from "$app/paths";
 
 	const publicConfig = usePublicConfig();
 
@@ -25,9 +28,10 @@
 
 	let { onclose }: Props = $props();
 
-	type View = "list" | "add";
+	type View = "list" | "add" | "import";
 	let currentView = $state<View>("list");
 	let isRefreshing = $state(false);
+	let isImporting = $state(false);
 
 	const baseServers = $derived($allMcpServers.filter((s) => s.type === "base"));
 	const customServers = $derived($allMcpServers.filter((s) => s.type === "custom"));
@@ -54,6 +58,36 @@
 			isRefreshing = false;
 		}
 	}
+
+	async function handleImportConfig(config: unknown) {
+		if (isImporting) return;
+		isImporting = true;
+		try {
+			const response = await fetch(`${base}/api/mcp/local-config`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify(config),
+			});
+
+			if (!response.ok) {
+				const error = await response.text();
+				throw new Error(error || "Failed to import configuration");
+			}
+
+			// Refresh the server list to show newly imported servers
+			await refreshMcpServers();
+			currentView = "list";
+		} catch (error) {
+			console.error("Failed to import config:", error);
+			alert(
+				`Failed to import configuration: ${error instanceof Error ? error.message : "Unknown error"}`
+			);
+		} finally {
+			isImporting = false;
+		}
+	}
 </script>
 
 <Modal width={currentView === "list" ? "w-[800px]" : "w-[600px]"} {onclose} closeButton>
@@ -63,15 +97,19 @@
 			<h2 class="mb-1 text-xl font-semibold text-gray-900 dark:text-gray-200">
 				{#if currentView === "list"}
 					MCP Servers
-				{:else}
+				{:else if currentView === "add"}
 					Add MCP server
+				{:else}
+					Import MCP Configuration
 				{/if}
 			</h2>
 			<p class="text-sm text-gray-600 dark:text-gray-400">
 				{#if currentView === "list"}
 					Manage MCP servers to extend {publicConfig.PUBLIC_APP_NAME} with external tools.
-				{:else}
+				{:else if currentView === "add"}
 					Add a custom MCP server to {publicConfig.PUBLIC_APP_NAME}.
+				{:else}
+					Import local MCP servers from JSON configuration (Windsurf/VS Code format).
 				{/if}
 			</p>
 		</div>
@@ -109,6 +147,13 @@
 					>
 						<IconRefresh class="size-4 {isRefreshing ? 'animate-spin' : ''}" />
 						{isRefreshing ? "Refreshing…" : "Refresh"}
+					</button>
+					<button
+						onclick={() => (currentView = "import")}
+						class="btn flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+					>
+						<IconUpload class="size-4" />
+						Import JSON
 					</button>
 					<button
 						onclick={() => (currentView = "add")}
@@ -180,6 +225,8 @@
 			</div>
 		{:else if currentView === "add"}
 			<AddServerForm onsubmit={handleAddServer} oncancel={handleCancel} />
+		{:else if currentView === "import"}
+			<ImportConfigForm onsubmit={handleImportConfig} oncancel={handleCancel} />
 		{/if}
 	</div>
 </Modal>

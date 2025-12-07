@@ -42,7 +42,7 @@ export async function* runMcpFlow({
 	boolean,
 	undefined
 > {
-	// Start from env-configured servers
+	// Start from env-configured servers (remote HTTP/S)
 	let servers = getMcpServers();
 	try {
 		console.debug(
@@ -112,10 +112,14 @@ export async function* runMcpFlow({
 		return false;
 	}
 
-	// Enforce server-side safety (public HTTPS only, no private ranges)
+	// Split into remote (HTTP/S) vs local (stdio) servers
+	const localServerNames = servers.filter((s) => s.url.startsWith("local://")).map((s) => s.name);
+	let remoteServers = servers.filter((s) => !s.url.startsWith("local://"));
+
+	// Enforce server-side safety (public HTTPS only, no private ranges) for remote servers only
 	{
-		const before = servers.slice();
-		servers = servers.filter((s) => {
+		const before = remoteServers.slice();
+		remoteServers = remoteServers.filter((s) => {
 			try {
 				return isValidUrl(s.url);
 			} catch {
@@ -123,7 +127,7 @@ export async function* runMcpFlow({
 			}
 		});
 		try {
-			const rejected = before.filter((b) => !servers.includes(b));
+			const rejected = before.filter((b) => !remoteServers.includes(b));
 			if (rejected.length > 0) {
 				console.warn(
 					{ rejected: rejected.map((r) => ({ name: r.name, url: r.url })) },
@@ -132,7 +136,7 @@ export async function* runMcpFlow({
 			}
 		} catch {}
 	}
-	if (servers.length === 0) {
+	if (remoteServers.length === 0 && localServerNames.length === 0) {
 		console.warn("[mcp] all selected MCP servers rejected by URL safety guard");
 		return false;
 	}
@@ -147,7 +151,7 @@ export async function* runMcpFlow({
 
 		if (shouldForward && hasNonEmptyToken(userToken)) {
 			const overlayApplied: string[] = [];
-			servers = servers.map((s) => {
+			remoteServers = remoteServers.map((s) => {
 				try {
 					if (isStrictHfMcpLogin(s.url) && !hasAuthHeader(s.headers)) {
 						overlayApplied.push(s.name);
@@ -171,10 +175,14 @@ export async function* runMcpFlow({
 		// best-effort overlay; continue if anything goes wrong
 	}
 	console.debug(
-		{ count: servers.length, servers: servers.map((s) => s.name) },
+		{
+			remoteCount: remoteServers.length,
+			localCount: localServerNames.length,
+			servers: [...remoteServers.map((s) => s.name), ...localServerNames],
+		},
 		"[mcp] servers configured"
 	);
-	if (servers.length === 0) {
+	if (remoteServers.length === 0 && localServerNames.length === 0) {
 		return false;
 	}
 
@@ -233,7 +241,9 @@ export async function* runMcpFlow({
 		return false;
 	}
 
-	const { tools: oaTools, mapping } = await getOpenAiToolsForMcp(servers, { signal: abortSignal });
+	const { tools: oaTools, mapping } = await getOpenAiToolsForMcp(remoteServers, localServerNames, {
+		signal: abortSignal,
+	});
 	try {
 		console.info(
 			{ toolCount: oaTools.length, toolNames: oaTools.map((t) => t.function.name) },
@@ -412,7 +422,8 @@ export async function* runMcpFlow({
 					headers: {
 						"ChatUI-Conversation-ID": conv._id.toString(),
 						"X-use-cache": "false",
-						...(locals?.token ? { Authorization: `Bearer ${locals.token}` } : {}),
+						// Don't override Authorization if using API key from config
+						// ...(locals?.token ? { Authorization: `Bearer ${locals.token}` } : {}),
 					},
 				}
 			);
@@ -547,7 +558,8 @@ export async function* runMcpFlow({
 							headers: {
 								"ChatUI-Conversation-ID": conv._id.toString(),
 								"X-use-cache": "false",
-								...(locals?.token ? { Authorization: `Bearer ${locals.token}` } : {}),
+								// Don't override Authorization if using API key from config
+								// ...(locals?.token ? { Authorization: `Bearer ${locals.token}` } : {}),
 							},
 						}
 					);

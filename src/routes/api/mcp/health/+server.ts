@@ -6,6 +6,7 @@ import { config } from "$lib/server/config";
 import type { RequestHandler } from "./$types";
 import { isValidUrl } from "$lib/server/urlSafety";
 import { isStrictHfMcpLogin, hasNonEmptyToken } from "$lib/server/mcp/hf";
+import { getLocalMcpClient } from "$lib/server/mcp/localRegistry";
 
 interface HealthCheckRequest {
 	url: string;
@@ -37,8 +38,56 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			});
 		}
 
-		// URL validation handled above
+		// Special handling for local MCP servers identified by the pseudo-URL scheme
+		// local://<name>. These do not use HTTP transports and should bypass
+		// standard URL safety checks.
+		if (url.startsWith("local://")) {
+			const name = url.slice("local://".length) || "";
+			const client = getLocalMcpClient(name);
+			if (!client) {
+				const res = new Response(
+					JSON.stringify({
+						ready: false,
+						error: `Local MCP server \"${name}\" is not available. Make sure it is configured and initialized.`,
+					} satisfies HealthCheckResponse),
+					{
+						status: 503,
+						headers: { "Content-Type": "application/json" },
+					}
+				);
+				return res;
+			}
 
+			try {
+				const tools = await client.listTools();
+				const res = new Response(
+					JSON.stringify({
+						ready: true,
+						tools,
+					} satisfies HealthCheckResponse),
+					{
+						status: 200,
+						headers: { "Content-Type": "application/json" },
+					}
+				);
+				return res;
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				const res = new Response(
+					JSON.stringify({
+						ready: false,
+						error: message,
+					} satisfies HealthCheckResponse),
+					{
+						status: 503,
+						headers: { "Content-Type": "application/json" },
+					}
+				);
+				return res;
+			}
+		}
+
+		// Remote HTTP MCP servers: enforce URL safety and use HTTP/SSE transports
 		if (!isValidUrl(url)) {
 			return new Response(
 				JSON.stringify({

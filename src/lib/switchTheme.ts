@@ -1,4 +1,4 @@
-export type ThemePreference = "light" | "dark" | "system";
+export type ThemePreference = "light" | "dark" | "stone" | "red" | "indigo" | "system";
 
 type ThemeState = {
 	preference: ThemePreference;
@@ -38,19 +38,48 @@ function setMetaThemeColor(isDark: boolean) {
 	metaTheme.setAttribute("content", isDark ? "rgb(26, 36, 50)" : "rgb(249, 250, 251)");
 }
 
-function applyDarkClass(isDark: boolean) {
-	const { classList } = document.querySelector("html") as HTMLElement;
-	if (isDark) classList.add("dark");
-	else classList.remove("dark");
+function applyTheme(preference: ThemePreference, systemIsDark: boolean) {
+	const html = document.querySelector("html") as HTMLElement;
+	html.classList.remove("dark", "stone", "red", "indigo");
+
+	let isDark = false;
+
+	if (preference === "stone") {
+		html.classList.add("dark", "stone");
+		isDark = true;
+	} else if (preference === "red") {
+		html.classList.add("dark", "red");
+		isDark = true;
+	} else if (preference === "indigo") {
+		html.classList.add("dark", "indigo");
+		isDark = true;
+	} else if (preference === "dark") {
+		html.classList.add("dark");
+		isDark = true;
+	} else if (preference === "system") {
+		if (systemIsDark) {
+			html.classList.add("dark");
+			isDark = true;
+		}
+	}
+	// light is default (no classes)
+
 	setMetaThemeColor(isDark);
 	notify(currentPreference, isDark);
 }
 
 export function getThemePreference(): ThemePreference {
 	const raw = typeof localStorage !== "undefined" ? localStorage.getItem("theme") : null;
-	if (raw === "light" || raw === "dark" || raw === "system") {
-		currentPreference = raw;
-		return raw;
+	if (
+		raw === "light" ||
+		raw === "dark" ||
+		raw === "stone" ||
+		raw === "red" ||
+		raw === "indigo" ||
+		raw === "system"
+	) {
+		currentPreference = raw as ThemePreference;
+		return raw as ThemePreference;
 	}
 	currentPreference = "system";
 	return "system";
@@ -60,6 +89,7 @@ export function getThemePreference(): ThemePreference {
  * Explicitly set the theme preference and apply it immediately.
  * - "light": force light
  * - "dark": force dark
+ * - "ocean": force ocean (blue dark)
  * - "system": follow the OS preference
  */
 export function setTheme(preference: ThemePreference) {
@@ -71,8 +101,7 @@ export function setTheme(preference: ThemePreference) {
 
 	const mql = window.matchMedia("(prefers-color-scheme: dark)");
 	currentPreference = preference;
-	const resolve = () =>
-		applyDarkClass(preference === "dark" || (preference === "system" && mql.matches));
+	const resolve = () => applyTheme(preference, mql.matches);
 
 	// Apply now
 	resolve();
@@ -117,8 +146,16 @@ export function setTheme(preference: ThemePreference) {
 
 // Backward-compatible toggle used by the sidebar button
 export function switchTheme() {
-	const html = document.querySelector("html") as HTMLElement;
-	const isDark = html.classList.contains("dark");
-	const next: ThemePreference = isDark ? "light" : "dark";
+	// Cycle: light -> dark -> stone -> red -> indigo -> light
+	const current = getThemePreference();
+	let next: ThemePreference = "light";
+
+	if (current === "light") next = "dark";
+	else if (current === "dark") next = "stone";
+	else if (current === "stone") next = "red";
+	else if (current === "red") next = "indigo";
+	else if (current === "indigo") next = "light";
+	else next = "light"; // system -> light
+
 	setTheme(next);
 }

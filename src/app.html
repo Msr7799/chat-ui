@@ -22,13 +22,31 @@
 		<script>
 			(function () {
 				try {
-					var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+					var html = document.documentElement;
+					html.classList.remove("dark", "stone", "red", "indigo");
 					var stored = localStorage.getItem("theme");
-					var followSystem = stored === null || stored === "system";
-					var isDark = stored === "dark" || (followSystem && prefersDark);
-					if (isDark) {
-						document.documentElement.classList.add("dark");
-						document.querySelector('meta[name="theme-color"]').setAttribute("content", "#07090d");
+					var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+					var useSystem = stored === null || stored === "system";
+					var meta = document.querySelector('meta[name="theme-color"]');
+
+					function applyDark(color) {
+						html.classList.add("dark");
+						if (meta) meta.setAttribute("content", color);
+					}
+
+					if (stored === "stone") {
+						applyDark("#050505");
+						html.classList.add("stone");
+					} else if (stored === "red") {
+						applyDark("#1a0505");
+						html.classList.add("red");
+					} else if (stored === "indigo") {
+						applyDark("#0c0a1d");
+						html.classList.add("indigo");
+					} else if (stored === "dark" || (useSystem && prefersDark)) {
+						applyDark("#07090d");
+					} else if (meta) {
+						meta.setAttribute("content", "rgb(249, 250, 251)");
 					}
 				} catch (e) {}
 			})();

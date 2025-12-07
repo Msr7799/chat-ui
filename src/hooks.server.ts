@@ -14,12 +14,13 @@ import { checkAndRunMigrations } from "$lib/migrations/migrations";
 import { building, dev } from "$app/environment";
 import { logger } from "$lib/server/logger";
 import { AbortedGenerations } from "$lib/server/abortedGenerations";
-import { initExitHandler } from "$lib/server/exitHandler";
+import { initExitHandler, onExit } from "$lib/server/exitHandler";
 import { refreshConversationStats } from "$lib/jobs/refresh-conversation-stats";
 import { adminTokenManager } from "$lib/server/adminToken";
 import { isHostLocalhost } from "$lib/server/isURLLocal";
 import { MetricsServer } from "$lib/server/metrics";
 import { loadMcpServersOnStartup } from "$lib/server/mcp/registry";
+import { initLocalMcpServers, cleanupLocalMcpServers } from "$lib/server/mcp/localRegistry";
 
 export const init: ServerInit = async () => {
 	// Wait for config to be fully loaded
@@ -50,8 +51,19 @@ export const init: ServerInit = async () => {
 		checkAndRunMigrations();
 		refreshConversationStats();
 
-		// Load MCP servers at startup
+		// Load MCP servers at startup (remote HTTP servers)
 		loadMcpServersOnStartup();
+
+		// Initialize local MCP servers (command/args/env style)
+		try {
+			await initLocalMcpServers();
+			// Register cleanup handler for local MCP servers
+			onExit(async () => {
+				await cleanupLocalMcpServers();
+			});
+		} catch (error) {
+			logger.error({ err: error }, "Failed to initialize local MCP servers");
+		}
 
 		// Init AbortedGenerations refresh process
 		AbortedGenerations.getInstance();

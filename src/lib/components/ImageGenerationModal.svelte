@@ -13,7 +13,23 @@
 
 	let { open = $bindable(false), onClose, onImageGenerated }: Props = $props();
 
+	// Supported models
+	const MODELS = [
+		{ id: "black-forest-labs/FLUX.1-schnell", name: "FLUX.1-schnell (Fast & High Quality)" },
+		{
+			id: "stabilityai/stable-diffusion-xl-base-1.0",
+			name: "Stable Diffusion XL (Open Source Leader)",
+		},
+		{ id: "ByteDance/SDXL-Lightning", name: "SDXL-Lightning (Ultra Fast)" },
+		{ id: "stabilityai/stable-diffusion-2-1", name: "Stable Diffusion 2.1 (Lightweight)" },
+		{
+			id: "playgroundai/playground-v2.5-1024px-aesthetic",
+			name: "Playground v2.5 (Aesthetic Focused)",
+		},
+	];
+
 	let prompt = $state("");
+	let selectedModel = $state(MODELS[0].id);
 	let isGenerating = $state(false);
 	let generatedImageUrl = $state<string | null>(null);
 	let error = $state<string | null>(null);
@@ -29,15 +45,31 @@
 
 		try {
 			// ✅ استدعاء API الصحيح - بدون () بعد generate
-			const response = await client.images.generate
-				.post({ prompt: prompt.trim() })
-				.then(handleResponse);
+			console.log("Sending request with model:", selectedModel);
+			const rawResponse = await client.images.generate.post({
+				prompt: prompt.trim(),
+				model: selectedModel,
+			});
+			console.log("Raw response received:", rawResponse);
 
-			if (response.success && response.image) {
+			const response = handleResponse(rawResponse) as {
+				success: boolean;
+				image: { url: string; [key: string]: any };
+			};
+			console.log("Parsed response:", response);
+
+			if (response?.success && response?.image) {
 				generatedImageUrl = response.image.url;
 				onImageGenerated?.(response.image.url);
+			} else {
+				// Even if we can't display it here, if we have success, try to reload gallery
+				if (response?.success) {
+					onImageGenerated?.("");
+				}
+				console.error("Invalid response structure:", response);
+				throw new Error("Invalid response format. See console for details.");
 			}
-		} catch (err) {
+		} catch (err: any) {
 			console.error("Image generation failed:", err);
 			error = String(err);
 		} finally {
@@ -105,6 +137,23 @@
 			<div class="space-y-6 p-6">
 				<!-- Prompt Input -->
 				<div>
+					<label
+						for="image-model"
+						class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+					>
+						Select Model
+					</label>
+					<select
+						id="image-model"
+						bind:value={selectedModel}
+						disabled={isGenerating}
+						class="mb-4 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 shadow-sm transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+					>
+						{#each MODELS as model}
+							<option value={model.id}>{model.name}</option>
+						{/each}
+					</select>
+
 					<label
 						for="image-prompt"
 						class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"

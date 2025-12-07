@@ -27,12 +27,22 @@
 	import CarbonImage from "~icons/carbon/image";
 	import CarbonSettings from "~icons/carbon/settings";
 	import CarbonCube from "~icons/carbon/cube";
+	import CarbonRainDrop from "~icons/carbon/rain-drop";
+	import CarbonFavorite from "~icons/carbon/favorite";
 	import IconSun from "$lib/components/icons/IconSun.svelte";
 	import IconMoon from "$lib/components/icons/IconMoon.svelte";
-	import { switchTheme, subscribeToTheme } from "$lib/switchTheme";
+	import {
+		switchTheme,
+		subscribeToTheme,
+		getThemePreference,
+		setTheme,
+		type ThemePreference,
+	} from "$lib/switchTheme";
 	import IconNew from "$lib/components/icons/IconNew.svelte";
 	import IconMCP from "$lib/components/icons/IconMCP.svelte";
 	import { browser } from "$app/environment";
+	import MCPServerManager from "$lib/components/mcp/MCPServerManager.svelte";
+	import IconChatBubble from "$lib/components/icons/IconChatBubble.svelte";
 
 	let { data = $bindable(), children } = $props();
 
@@ -48,7 +58,9 @@
 
 	let isNavCollapsed = $state(false);
 	let isDark = $state(false);
+	let themePreference = $state<ThemePreference>("system");
 	let unsubscribeTheme: (() => void) | undefined;
+	let isMcpManagerOpen = $state(false);
 
 	let errorToastTimeout: ReturnType<typeof setTimeout>;
 	let currentError: string | undefined = $state();
@@ -150,9 +162,15 @@
 
 	onMount(async () => {
 		if (browser) {
-			unsubscribeTheme = subscribeToTheme(({ isDark: nextIsDark }) => {
+			// تابع تغيّر الثيم داخل التطبيق
+			unsubscribeTheme = subscribeToTheme(({ isDark: nextIsDark, preference }) => {
 				isDark = nextIsDark;
+				themePreference = preference;
 			});
+
+			// طبّق آخر ثيم مخزَّن في localStorage عند أول تحميل للصفحة
+			const pref = getThemePreference();
+			setTheme(pref);
 		}
 
 		if (page.url.searchParams.has("model")) {
@@ -326,7 +344,7 @@
 					aria-label="Home"
 					title="Chat home"
 				>
-					<Logo classNames="size-5 invert" />
+					<IconChatBubble classNames="size-6" />
 				</a>
 				<!-- زر محادثة جديدة -->
 				<a
@@ -394,8 +412,16 @@
 					title="Theme"
 				>
 					{#if browser}
-						{#if isDark}
+						{#if themePreference === "light" || (themePreference === "system" && !isDark)}
+							<IconMoon />
+						{:else if themePreference === "dark"}
+							<IconSun classNames="text-zinc-400" />
+						{:else if themePreference === "stone"}
+							<CarbonFavorite class="text-red-400" />
+						{:else if themePreference === "red"}
 							<IconSun />
+						{:else if themePreference === "indigo"}
+							<CarbonRainDrop class="text-zinc-950" />
 						{:else}
 							<IconMoon />
 						{/if}
@@ -468,5 +494,9 @@
 					}));
 			plausible.init();
 		</script>
+	{/if}
+
+	{#if isMcpManagerOpen}
+		<MCPServerManager onclose={() => (isMcpManagerOpen = false)} />
 	{/if}
 </div>

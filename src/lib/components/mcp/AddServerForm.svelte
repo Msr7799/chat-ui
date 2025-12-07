@@ -30,11 +30,21 @@
 	}: Props = $props();
 
 	// Use regular component-local state here to avoid Svelte's state_referenced_locally warnings
-	let name = initialName;
-	let url = initialUrl;
-	let headers: KeyValuePair[] = initialHeaders.length > 0 ? [...initialHeaders] : [];
-	let showHeaderValues: Record<number, boolean> = {};
-	let error: string | null = null;
+	let name = $state("");
+	let url = $state("");
+	let headers = $state<KeyValuePair[]>([]);
+	let showHeaderValues = $state<Record<number, boolean>>({});
+	let error = $state<string | null>(null);
+
+	$effect(() => {
+		name = initialName;
+	});
+	$effect(() => {
+		url = initialUrl;
+	});
+	$effect(() => {
+		headers = initialHeaders.length > 0 ? [...initialHeaders] : [];
+	});
 
 	function addHeader() {
 		headers = [...headers, { key: "", value: "" }];
@@ -207,13 +217,13 @@
 
 	<!-- Security warning about custom MCP servers -->
 	<div
-		class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900 dark:border-yellow-900/40 dark:bg-yellow-900/20 dark:text-yellow-100"
+		class="rounded-lg border border-stone-200 bg-stone-50 p-3 text-stone-900 dark:border-yellow-900/40 dark:bg-yellow-900/20 dark:text-yellow-100"
 	>
 		<div class="flex items-start gap-3">
-			<IconWarning class="mt-0.5 size-4 flex-none text-amber-600 dark:text-yellow-300" />
+			<IconWarning class="mt-0.5 size-4 flex-none text-stone-600 dark:text-yellow-300" />
 			<div class="text-sm leading-5">
 				<p class="font-medium">Be careful with custom MCP servers.</p>
-				<p class="mt-1 text-[13px] text-amber-800 dark:text-yellow-100/90">
+				<p class="mt-1 text-[13px] text-stone-800 dark:text-yellow-100/90">
 					They receive your requests (including conversation context and any headers you add) and
 					can run powerful tools on your behalf. Only add servers you trust and review their source.
 					Never share confidental informations.

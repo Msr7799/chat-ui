@@ -7,13 +7,22 @@ import { config } from "$lib/server/config";
 import { logger } from "$lib/server/logger";
 import { HfInference } from "@huggingface/inference";
 
+// Supported models
+const MODELS = {
+	"black-forest-labs/FLUX.1-schnell": "FLUX.1-schnell (Fast & High Quality)",
+	"stabilityai/stable-diffusion-xl-base-1.0": "Stable Diffusion XL (Open Source Leader)",
+	"ByteDance/SDXL-Lightning": "SDXL-Lightning (Ultra Fast)",
+	"stabilityai/stable-diffusion-2-1": "Stable Diffusion 2.1 (Lightweight)",
+	"playgroundai/playground-v2.5-1024px-aesthetic": "Playground v2.5 (Aesthetic Focused)",
+};
+
 const FLUX_MODEL_ID = "black-forest-labs/FLUX.1-schnell";
 
 export const imageGroup = new Elysia().group("/images", (app) =>
 	app
 		.use(authPlugin)
 		.post("/generate", async ({ locals, body, set }) => {
-			const { prompt } = body as { prompt: string };
+			const { prompt, model } = body as { prompt: string; model?: string };
 
 			if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
 				set.status = 400;
@@ -25,6 +34,15 @@ export const imageGroup = new Elysia().group("/images", (app) =>
 				return { error: "Prompt is too long (max 500 characters)" };
 			}
 
+			// Check authentication
+			if (!locals.user) {
+				set.status = 401;
+				return { error: "Authentication required" };
+			}
+
+			// Validate model or use default
+			const selectedModel = model && Object.keys(MODELS).includes(model) ? model : FLUX_MODEL_ID;
+
 			try {
 				const apiToken = config.OPENAI_API_KEY || config.HF_TOKEN;
 
@@ -32,12 +50,12 @@ export const imageGroup = new Elysia().group("/images", (app) =>
 					throw new Error("HF_TOKEN not configured in .env");
 				}
 
-				logger.info({ model: FLUX_MODEL_ID }, "Generating image with FLUX");
+				logger.info({ userId: locals.user._id, prompt, model: selectedModel }, "Generating image");
 
 				const hf = new HfInference(apiToken);
 
 				const imageBlob = (await hf.textToImage({
-					model: FLUX_MODEL_ID,
+					model: selectedModel,
 					inputs: prompt.trim(),
 				})) as unknown as Blob;
 
@@ -55,42 +73,41 @@ export const imageGroup = new Elysia().group("/images", (app) =>
 					tags,
 				});
 
-				// Save to MongoDB (if user is logged in)
+				// Save to MongoDB
 				let generatedImageId = new ObjectId();
-				if (locals.user) {
-					await collections.generatedImages.insertOne({
-						_id: generatedImageId,
-						userId: locals.user._id,
-						prompt: prompt.trim(),
-						cloudinaryUrl: cloudinaryResult.url,
-						cloudinaryPublicId: cloudinaryResult.publicId,
-						width: cloudinaryResult.width,
-						height: cloudinaryResult.height,
-						modelUsed: FLUX_MODEL_ID,
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					});
+				const imageDoc = {
+					_id: generatedImageId,
+					userId: locals.user._id,
+					prompt: prompt.trim(),
+					cloudinaryUrl: cloudinaryResult.url,
+					cloudinaryPublicId: cloudinaryResult.publicId,
+					width: cloudinaryResult.width,
+					height: cloudinaryResult.height,
+					modelUsed: selectedModel,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				};
 
-					logger.info("Image generated and saved to MongoDB");
-				} else {
-					logger.info("Image generated for anonymous user");
-				}
+				await collections.generatedImages.insertOne(imageDoc);
+				logger.info("Image generated and saved to MongoDB");
 
+				// Return the generated image details to the frontend
 				return {
 					success: true,
 					image: {
-						_id: generatedImageId,
+						_id: generatedImageId.toString(),
 						url: cloudinaryResult.url,
-						prompt: prompt.trim(),
-						width: cloudinaryResult.width,
-						height: cloudinaryResult.height,
-						createdAt: new Date(),
+						prompt: imageDoc.prompt,
+						modelUsed: imageDoc.modelUsed,
+						width: imageDoc.width,
+						height: imageDoc.height,
+						createdAt: imageDoc.createdAt,
 					},
 				};
 			} catch (error) {
 				logger.error({ error: String(error) }, "Image generation failed");
 				set.status = 500;
-				return { error: `Failed to generate image: ${error}` };
+				return { success: false, error: "Failed to generate image: " + String(error) };
 			}
 		})
 		.get("/", async ({ locals, query, set }) => {
@@ -101,8 +118,7 @@ export const imageGroup = new Elysia().group("/images", (app) =>
 			}
 
 			const page = parseInt((query.page as string) || "0", 10);
-			const limit = Math.min(parseInt((query.limit as string) || "20", 10), 50);
-
+			const limit = Math.min(parseInt((query.limit as string) || "100", 10), 100);
 			try {
 				const images = await collections.generatedImages
 					.find({ userId: locals.user._id })

@@ -268,18 +268,19 @@
 		}
 	});
 
-	let chatContainer: HTMLElement | undefined;
+	let chatContainer = $state<HTMLElement | undefined>();
 
 	// Force scroll to bottom when user sends a new message
 	// Pattern: user message + empty assistant message are added together
-	let prevMessageCount = messages.length;
-	let forceReattach = 0;
+	let prevMessageCount = $state(0);
+	let forceReattach = $state(0);
 	$effect(() => {
-		if (messages.length > prevMessageCount) {
+		const currentLen = messages.length;
+		if (currentLen > prevMessageCount) {
 			const last = messages.at(-1);
 			const secondLast = messages.at(-2);
 			const userJustSentMessage =
-				messages.length === prevMessageCount + 2 &&
+				currentLen === prevMessageCount + 2 &&
 				secondLast?.from === "user" &&
 				last?.from === "assistant" &&
 				last?.content === "";
@@ -288,7 +289,7 @@
 				forceReattach++;
 			}
 		}
-		prevMessageCount = messages.length;
+		prevMessageCount = currentLen;
 	});
 
 	// Combined scroll dependency for the action
@@ -622,7 +623,7 @@
 					handleSubmit();
 				}}
 				class={{
-					"relative flex w-full max-w-4xl flex-1 items-center rounded-xl border bg-gray-100 dark:border-gray-700 dark:bg-gray-800": true,
+					"relative flex w-full max-w-4xl flex-1 items-center rounded-2xl border border-gray-200 bg-white/90 p-0.5 shadow-[0_20px_60px_rgba(15,23,42,0.15)] backdrop-blur dark:border-gray-700 dark:bg-gray-900/60": true,
 					"opacity-30": isReadOnly,
 					"max-sm:mb-4": focused && isVirtualKeyboard(),
 				}}

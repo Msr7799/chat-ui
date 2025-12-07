@@ -21,9 +21,9 @@ export const endpointOAIParametersSchema = z.object({
 	weight: z.number().int().positive().default(1),
 	model: z.any(),
 	type: z.literal("openai"),
-	baseURL: z.string().url().default("https://api.openai.com/v1"),
+	baseURL: z.string().url().default("https://router.huggingface.co/v1"),
 	// Canonical auth token is OPENAI_API_KEY; keep HF_TOKEN as legacy alias
-	apiKey: z.string().default(config.OPENAI_API_KEY || config.HF_TOKEN || "sk-"),
+	apiKey: z.string().default(config.OPENAI_API_KEY || config.HF_TOKEN || "hf-"),
 	completion: z
 		.union([z.literal("completions"), z.literal("chat_completions")])
 		.default("chat_completions"),
@@ -100,6 +100,23 @@ export async function endpointOai(
 
 		return response;
 	};
+
+	// Debug which token/baseURL are being used (without exposing full key)
+	try {
+		const tokenPreview = typeof apiKey === "string" ? apiKey.slice(0, 8) : "";
+		console.log(
+			{
+				baseURL,
+				apiKeySource: config.OPENAI_API_KEY
+					? "OPENAI_API_KEY"
+					: config.HF_TOKEN
+						? "HF_TOKEN"
+						: "none",
+				apiKeyPreview: tokenPreview,
+			},
+			"[openai-endpoint] constructing OpenAI client"
+		);
+	} catch {}
 
 	const openai = new OpenAI({
 		apiKey: apiKey || "sk-",

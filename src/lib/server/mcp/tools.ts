@@ -2,6 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import type { McpServerConfig } from "./httpClient";
+import { getLocalMcpClient } from "./localRegistry";
 // use console.* for lightweight diagnostics in production logs
 
 export type OpenAiTool = {
@@ -13,6 +14,7 @@ export interface McpToolMapping {
 	fnName: string;
 	server: string;
 	tool: string;
+	isLocal?: boolean;
 }
 
 interface CacheEntry {
@@ -102,12 +104,40 @@ async function listServerTools(
 	}
 }
 
+async function listLocalServerTools(
+	name: string,
+	opts: { signal?: AbortSignal } = {}
+): Promise<ListedTool[]> {
+	const client = getLocalMcpClient(name);
+	if (!client) return [];
+
+	// Local client already manages its own process/connection lifecycle and
+	// its listTools method returns the tools array directly.
+	const tools = (await client.listTools()) as ListedTool[];
+	try {
+		console.debug(
+			{
+				server: name,
+				url: `local://${name}`,
+				count: tools.length,
+				toolNames: tools.map((t) => t?.name).filter(Boolean),
+			},
+			"[mcp-local] listed tools from server"
+		);
+	} catch {}
+	return tools;
+}
+
 export async function getOpenAiToolsForMcp(
 	servers: McpServerConfig[],
+	localServerNames: string[] = [],
 	{ ttlMs = DEFAULT_TTL_MS, signal }: { ttlMs?: number; signal?: AbortSignal } = {}
 ): Promise<{ tools: OpenAiTool[]; mapping: Record<string, McpToolMapping> }> {
 	const now = Date.now();
-	const cacheKey = buildCacheKey(servers);
+	const cacheKey = JSON.stringify({
+		remote: JSON.parse(buildCacheKey(servers)),
+		local: [...localServerNames].sort(),
+	});
 	const cached = cache.get(cacheKey);
 	if (cached && now - cached.fetchedAt < cached.ttlMs) {
 		return { tools: cached.tools, mapping: cached.mapping };
@@ -135,13 +165,13 @@ export async function getOpenAiToolsForMcp(
 		seenNames.add(name);
 	};
 
-	// Fetch tools in parallel; tolerate individual failures
-	const tasks = servers.map((server) => listServerTools(server, { signal }));
-	const results = await Promise.allSettled(tasks);
+	// Fetch tools from remote servers in parallel; tolerate individual failures
+	const remoteTasks = servers.map((server) => listServerTools(server, { signal }));
+	const remoteResults = await Promise.allSettled(remoteTasks);
 
-	for (let i = 0; i < results.length; i++) {
+	for (let i = 0; i < remoteResults.length; i++) {
 		const server = servers[i];
-		const r = results[i];
+		const r = remoteResults[i];
 		if (r.status === "fulfilled") {
 			const serverTools = r.value;
 			for (const tool of serverTools) {
@@ -178,10 +208,55 @@ export async function getOpenAiToolsForMcp(
 					fnName: plainName,
 					server: server.name,
 					tool: toolName,
+					isLocal: false,
 				};
 			}
 		} else {
 			// ignore failure for this server
+			continue;
+		}
+	}
+
+	// Fetch tools from local MCP servers
+	for (const name of localServerNames) {
+		try {
+			const serverTools = await listLocalServerTools(name, { signal });
+			for (const tool of serverTools) {
+				if (typeof tool.name !== "string" || tool.name.trim().length === 0) {
+					continue;
+				}
+
+				const parameters =
+					tool.inputSchema && typeof tool.inputSchema === "object" ? tool.inputSchema : undefined;
+				const description = tool.description ?? tool.annotations?.title;
+				const toolName = tool.name;
+
+				let plainName = sanitizeName(toolName);
+				if (plainName in mapping) {
+					const suffix = sanitizeName(name);
+					const candidate = `${plainName}_${suffix}`.slice(0, 64);
+					if (!(candidate in mapping)) {
+						plainName = candidate;
+					} else {
+						let i = 2;
+						let next = `${candidate}_${i}`;
+						while (i < 10 && next in mapping) {
+							i += 1;
+							next = `${candidate}_${i}`;
+						}
+						plainName = next.slice(0, 64);
+					}
+				}
+
+				pushToolDefinition(plainName, description, parameters);
+				mapping[plainName] = {
+					fnName: plainName,
+					server: name,
+					tool: toolName,
+					isLocal: true,
+				};
+			}
+		} catch {
 			continue;
 		}
 	}

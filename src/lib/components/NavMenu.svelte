@@ -17,10 +17,18 @@
 	import CarbonImage from "~icons/carbon/image";
 	import CarbonSettings from "~icons/carbon/settings";
 	import CarbonLogout from "~icons/carbon/logout";
+	import CarbonCube from "~icons/carbon/cube";
+	import CarbonSearch from "~icons/carbon/search";
+	import CarbonClose from "~icons/carbon/close";
+	import CarbonTrash from "~icons/carbon/trash-can";
+	import CarbonCheckmark from "~icons/carbon/checkmark";
+	import CarbonRainDrop from "~icons/carbon/rain-drop";
+	import CarbonSun from "~icons/carbon/sun";
+	import CarbonFavorite from "~icons/carbon/favorite";
 	import IconSun from "$lib/components/icons/IconSun.svelte";
 	import IconMoon from "$lib/components/icons/IconMoon.svelte";
 	import IconMCP from "$lib/components/icons/IconMCP.svelte";
-	import { switchTheme, subscribeToTheme } from "$lib/switchTheme";
+	import { switchTheme, subscribeToTheme, type ThemePreference } from "$lib/switchTheme";
 	import { isAborted } from "$lib/stores/isAborted";
 	import { onDestroy } from "svelte";
 
@@ -58,6 +66,16 @@
 	}: Props = $props();
 
 	let hasMore = $state(true);
+
+	let isDark = $state(false);
+	let themePreference = $state<ThemePreference>("system");
+
+	$effect(() => {
+		return subscribeToTheme(({ preference, isDark: dark }) => {
+			themePreference = preference;
+			isDark = dark;
+		});
+	});
 
 	// Online Duration Logic
 	function formatDuration(ms: number | undefined) {
@@ -165,24 +183,71 @@
 		}
 	});
 
-	let isDark = $state(false);
-	let unsubscribeTheme: (() => void) | undefined;
 	let showMcpModal = $state(false);
 	let showUserMenu = $state(false);
+	let searchQuery = $state("");
+	let isSelectionMode = $state(false);
+	let selectedConversations = $state<Set<string>>(new Set());
 
-	if (browser) {
-		unsubscribeTheme = subscribeToTheme(({ isDark: nextIsDark }) => {
-			isDark = nextIsDark;
-		});
+	// Filter conversations based on search query
+	let filteredConversations = $derived(
+		searchQuery.trim()
+			? conversations.filter((conv) => conv.title.toLowerCase().includes(searchQuery.toLowerCase()))
+			: conversations
+	);
+
+	// Group filtered conversations
+	let filteredGroupedConversations = $derived({
+		today: filteredConversations.filter(({ updatedAt }) => updatedAt.getTime() > dateRanges[0]),
+		week: filteredConversations.filter(
+			({ updatedAt }) => updatedAt.getTime() > dateRanges[1] && updatedAt.getTime() < dateRanges[0]
+		),
+		month: filteredConversations.filter(
+			({ updatedAt }) => updatedAt.getTime() > dateRanges[2] && updatedAt.getTime() < dateRanges[1]
+		),
+		older: filteredConversations.filter(({ updatedAt }) => updatedAt.getTime() < dateRanges[2]),
+	});
+
+	function toggleSelectionMode() {
+		isSelectionMode = !isSelectionMode;
+		if (!isSelectionMode) {
+			selectedConversations.clear();
+		}
 	}
 
-	onDestroy(() => {
-		unsubscribeTheme?.();
-	});
+	function toggleConversationSelection(id: string) {
+		if (selectedConversations.has(id)) {
+			selectedConversations.delete(id);
+		} else {
+			selectedConversations.add(id);
+		}
+		selectedConversations = new Set(selectedConversations);
+	}
+
+	async function deleteSelectedConversations() {
+		if (selectedConversations.size === 0) return;
+
+		const confirmMessage = `Delete ${selectedConversations.size} conversation${selectedConversations.size > 1 ? "s" : ""}?`;
+		if (!confirm(confirmMessage)) return;
+
+		const idsToDelete = Array.from(selectedConversations);
+
+		for (const id of idsToDelete) {
+			try {
+				await client.conversations({ id }).delete().then(handleResponse);
+				conversations = conversations.filter((conv) => conv.id !== id);
+			} catch (err) {
+				console.error(`Failed to delete conversation ${id}:`, err);
+			}
+		}
+
+		selectedConversations.clear();
+		isSelectionMode = false;
+	}
 </script>
 
 <div
-	class="sticky top-0 flex flex-none touch-none items-center justify-between px-1.5 py-3.5 max-sm:pt-0"
+	class="sticky top-0 z-20 flex flex-none touch-none items-center justify-between bg-white px-1.5 py-3.5 dark:bg-gray-900 max-sm:pt-0"
 >
 	<a
 		class="flex select-none items-center rounded-xl text-lg font-semibold"
@@ -192,6 +257,35 @@
 		{publicConfig.PUBLIC_APP_NAME}
 	</a>
 	<div class="flex items-center gap-2">
+		{#if isSelectionMode}
+			<button
+				onclick={toggleSelectionMode}
+				class="flex size-9 items-center justify-center rounded-lg border bg-white text-gray-700 shadow-sm transition-all hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+				title="Cancel Selection"
+				aria-label="Cancel Selection"
+			>
+				<CarbonClose class="text-xl" />
+			</button>
+			{#if selectedConversations.size > 0}
+				<button
+					onclick={deleteSelectedConversations}
+					class="flex size-9 items-center justify-center rounded-lg border bg-red-600 text-white shadow-sm transition-all hover:bg-red-700"
+					title="Delete Selected ({selectedConversations.size})"
+					aria-label="Delete Selected"
+				>
+					<CarbonTrash class="text-xl" />
+				</button>
+			{/if}
+		{:else}
+			<button
+				onclick={toggleSelectionMode}
+				class="flex size-9 items-center justify-center rounded-lg border bg-white text-gray-700 shadow-sm transition-all hover:bg-gray-50 hover:shadow-md dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+				title="Select Conversations"
+				aria-label="Select Conversations"
+			>
+				<CarbonCheckmark class="text-xl" />
+			</button>
+		{/if}
 		<a
 			href={`${base}/`}
 			onclick={handleNewChatClick}
@@ -315,17 +409,46 @@
 	</div>
 </div>
 
+<!-- Search Input -->
+<div class="px-3 pb-2">
+	<div class="relative">
+		<input
+			type="text"
+			bind:value={searchQuery}
+			placeholder="Search conversations..."
+			class="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-9 text-sm text-gray-900 placeholder-gray-500 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400"
+		/>
+		<CarbonSearch class="absolute left-2.5 top-1/2 -translate-y-1/2 text-lg text-gray-400" />
+		{#if searchQuery}
+			<button
+				onclick={() => (searchQuery = "")}
+				class="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+				aria-label="Clear search"
+			>
+				<CarbonClose class="text-base" />
+			</button>
+		{/if}
+	</div>
+</div>
+
 <div
 	class="scrollbar-custom flex touch-pan-y flex-col gap-1 overflow-y-auto rounded-r-xl border border-l-0 border-gray-100 from-gray-50 px-3 pb-3 pt-2 text-[.9rem] dark:border-transparent dark:from-gray-800/30 max-sm:bg-gradient-to-t md:bg-gradient-to-l"
 >
 	<div class="flex flex-col gap-0.5">
-		{#each Object.entries(groupedConversations) as [group, convs]}
+		{#each Object.entries(filteredGroupedConversations) as [group, convs]}
 			{#if convs.length}
 				<h4 class="mb-1.5 mt-4 pl-0.5 text-sm text-gray-400 first:mt-0 dark:text-gray-500">
 					{titles[group]}
 				</h4>
 				{#each convs as conv}
-					<NavConversationItem {conv} {oneditConversationTitle} {ondeleteConversation} />
+					<NavConversationItem
+						{conv}
+						{oneditConversationTitle}
+						{ondeleteConversation}
+						{isSelectionMode}
+						isSelected={selectedConversations.has(conv.id)}
+						onToggleSelection={() => toggleConversationSelection(conv.id)}
+					/>
 				{/each}
 			{/if}
 		{/each}
@@ -343,7 +466,8 @@
 		class="flex h-9 flex-none items-center gap-1.5 rounded-lg pl-2.5 pr-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
 		onclick={handleNavItemClick}
 	>
-		Models
+		<CarbonCube class="text-lg" />
+		<span>Models</span>
 		<span
 			class="ml-auto rounded-md bg-gray-500/5 px-1.5 py-0.5 text-xs text-gray-400 dark:bg-gray-500/20 dark:text-gray-400"
 		>
@@ -394,8 +518,16 @@
 		class="flex h-9 flex-none items-center gap-1.5 rounded-lg pl-2.5 pr-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
 	>
 		{#if browser}
-			{#if isDark}
-				<IconSun />
+			{#if themePreference === "light" || (themePreference === "system" && !isDark)}
+				<IconMoon />
+			{:else if themePreference === "dark"}
+				<CarbonSun class="text-zinc-400" />
+			{:else if themePreference === "stone"}
+				<CarbonFavorite class="text-red-400" />
+			{:else if themePreference === "red"}
+			<IconSun />
+			{:else if themePreference === "indigo"}
+			<CarbonRainDrop class="text-zinc-950" />
 			{:else}
 				<IconMoon />
 			{/if}

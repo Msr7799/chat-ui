@@ -284,6 +284,21 @@ export function deleteCustomServer(id: string) {
 }
 
 /**
+ * Delete a local base MCP server that was added via JSON config
+ */
+export async function deleteLocalBaseServer(name: string) {
+	try {
+		await fetch(`${base}/api/mcp/local-config?name=${encodeURIComponent(name)}`, {
+			method: "DELETE",
+		});
+	} catch (error) {
+		console.error("Failed to delete local MCP base server:", error);
+	}
+
+	await refreshMcpServers();
+}
+
+/**
  * Update server status (from health check)
  */
 export function updateServerStatus(

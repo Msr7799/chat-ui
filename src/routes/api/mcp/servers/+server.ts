@@ -1,32 +1,53 @@
 import type { MCPServer } from "$lib/types/Tool";
 import { config } from "$lib/server/config";
+import { getLocalMcpConfig } from "$lib/server/mcp/localRegistry";
 
 export async function GET() {
-	// Parse MCP_SERVERS environment variable
-	const mcpServersEnv = config.MCP_SERVERS || "[]";
+	const mcpServers: MCPServer[] = [];
 
-	let servers: Array<{ name: string; url: string; headers?: Record<string, string> }> = [];
+	// 1. Add remote HTTP MCP servers from MCP_SERVERS env
+	const mcpServersEnv = config.MCP_SERVERS || "[]";
+	let remoteServers: Array<{ name: string; url: string; headers?: Record<string, string> }> = [];
 
 	try {
-		servers = JSON.parse(mcpServersEnv);
-		if (!Array.isArray(servers)) {
-			servers = [];
+		remoteServers = JSON.parse(mcpServersEnv);
+		if (!Array.isArray(remoteServers)) {
+			remoteServers = [];
 		}
 	} catch (error) {
 		console.error("Failed to parse MCP_SERVERS env variable:", error);
-		servers = [];
+		remoteServers = [];
 	}
 
-	// Convert internal server config to client MCPServer format
-	const mcpServers: MCPServer[] = servers.map((server) => ({
-		id: `base-${server.name}`, // Stable ID based on name
-		name: server.name,
-		url: server.url,
-		type: "base" as const,
-		// headers intentionally omitted
-		isLocked: false, // Base servers can be toggled by users
-		status: undefined, // Status determined client-side via health check
-	}));
+	// Convert remote servers to client MCPServer format
+	for (const server of remoteServers) {
+		mcpServers.push({
+			id: `remote-${server.name}`,
+			name: server.name,
+			url: server.url,
+			type: "base" as const,
+			// headers intentionally omitted
+			isLocked: false,
+			status: undefined,
+		});
+	}
+
+	// 2. Add local MCP servers from local config
+	try {
+		const localConfig = getLocalMcpConfig();
+		for (const [name, serverConfig] of Object.entries(localConfig.mcpServers)) {
+			mcpServers.push({
+				id: `local-${name}`,
+				name: name,
+				url: `local://${name}`, // Pseudo URL used only to route to local MCP client
+				type: "base" as const,
+				isLocked: false,
+				status: undefined, // Status will be determined by health check
+			});
+		}
+	} catch (error) {
+		console.error("Failed to load local MCP servers:", error);
+	}
 
 	return Response.json(mcpServers);
 }
