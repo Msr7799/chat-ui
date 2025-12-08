@@ -394,7 +394,7 @@
 						if (requireAuthUser()) {
 							return;
 						}
-						shareModal.open();
+						isMcpManagerOpen = true;
 					}}
 				>
 					<IconMCP classNames="size-5" />

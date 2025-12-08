@@ -89,7 +89,7 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="flex h-screen max-h-screen flex-col overflow-hidden">
+<div class="flex h-screen max-h-screen flex-col overflow-hidden md:pl-14">
 	<!-- Header -->
 	<div
 		class="flex-shrink-0 border-b border-gray-200 bg-white px-6 py-4 dark:border-gray-800 dark:bg-gray-900"
