@@ -31,6 +31,7 @@
 	import { switchTheme, subscribeToTheme, type ThemePreference } from "$lib/switchTheme";
 	import { isAborted } from "$lib/stores/isAborted";
 	import { onDestroy } from "svelte";
+	import { get } from "svelte/store";
 
 	import NavConversationItem from "./NavConversationItem.svelte";
 	import type { LayoutData } from "../../routes/$types";
@@ -114,7 +115,7 @@
 	}
 
 	function handleLogin() {
-		const currentPath = page.url.pathname + page.url.search;
+		const currentPath = get(page).url.pathname + get(page).url.search;
 		window.location.href = resolve("/login") + `?next=${encodeURIComponent(currentPath)}`;
 	}
 
@@ -161,7 +162,7 @@
 		older: conversations.filter(({ updatedAt }) => updatedAt.getTime() < dateRanges[2]),
 	});
 
-	const nModels: number = page.data.models.filter((el: Model) => !el.unlisted).length;
+	const nModels: number = get(page).data.models.filter((el: Model) => !el.unlisted).length;
 
 	async function handleVisible() {
 		p++;
