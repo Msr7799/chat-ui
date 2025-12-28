@@ -66,6 +66,13 @@ export const videoGroup = new Elysia().group("/videos", (app) =>
 					set.status = 400;
 					return { success: false, error: "Invalid referenceImage.mimeType" };
 				}
+				if (mimeType !== "image/jpeg" && mimeType !== "image/png") {
+					set.status = 400;
+					return {
+						success: false,
+						error: "Unsupported reference image type. Please use PNG or JPEG.",
+					};
+				}
 				if (typeof dataRaw !== "string" || dataRaw.trim().length === 0) {
 					set.status = 400;
 					return { success: false, error: "Invalid referenceImage.data" };
@@ -100,6 +107,7 @@ export const videoGroup = new Elysia().group("/videos", (app) =>
 						numberOfVideos: 1,
 						aspectRatio: "16:9",
 						resolution: "720p",
+						...(referenceImageClean ? { personGeneration: "allow_adult" as const } : {}),
 					},
 				});
 
