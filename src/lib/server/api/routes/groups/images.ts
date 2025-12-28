@@ -1,4 +1,4 @@
-import { Elysia, t } from "elysia";
+import { Elysia } from "elysia";
 import { authPlugin } from "$api/authPlugin";
 import { collections } from "$lib/server/database";
 import { uploadImageToCloudinary, deleteImageFromCloudinary } from "$lib/server/cloudinary";
@@ -6,6 +6,17 @@ import { ObjectId } from "mongodb";
 import { config } from "$lib/server/config";
 import { logger } from "$lib/server/logger";
 import { HfInference } from "@huggingface/inference";
+
+type GoogleModel = {
+	id: string;
+	created?: number;
+	owned_by?: string;
+};
+
+type GoogleReferenceImage = {
+	data: string;
+	mimeType: string;
+};
 
 // Supported models
 const MODELS = {
@@ -21,6 +32,212 @@ const FLUX_MODEL_ID = "black-forest-labs/FLUX.1-schnell";
 export const imageGroup = new Elysia().group("/images", (app) =>
 	app
 		.use(authPlugin)
+		.get("/google/models", async ({ locals, set }) => {
+			if (!locals.user) {
+				set.status = 401;
+				return { error: "Authentication required" };
+			}
+
+			const apiKey = config.GEMINI_API_KEY;
+			if (!apiKey) {
+				set.status = 500;
+				return { error: "GEMINI_API_KEY not configured" };
+			}
+
+			try {
+				const res = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/models", {
+					method: "GET",
+					headers: {
+						Authorization: `Bearer ${apiKey}`,
+						"x-goog-api-key": apiKey,
+					},
+				});
+
+				if (!res.ok) {
+					const text = await res.text().catch(() => "");
+					set.status = 502;
+					return { error: `Failed to fetch Google models (${res.status}): ${text}` };
+				}
+
+				const json = (await res.json()) as { data?: GoogleModel[] };
+				const models = Array.isArray(json.data) ? json.data : [];
+				models.sort((a, b) => (b.created ?? 0) - (a.created ?? 0));
+
+				return {
+					models: models.map((m) => ({
+						id: m.id,
+						created: m.created,
+					})),
+				};
+			} catch (error) {
+				logger.error({ error: String(error) }, "Failed to fetch Google models");
+				set.status = 502;
+				return { error: "Failed to fetch Google models" };
+			}
+		})
+		.post("/google/generate", async ({ locals, body, set }) => {
+			const { prompt, model, referenceImage } = body as {
+				prompt: string;
+				model?: string;
+				referenceImage?: GoogleReferenceImage;
+			};
+
+			if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
+				set.status = 400;
+				return { error: "Prompt is required" };
+			}
+
+			if (prompt.length > 500) {
+				set.status = 400;
+				return { error: "Prompt is too long (max 500 characters)" };
+			}
+
+			if (!locals.user) {
+				set.status = 401;
+				return { error: "Authentication required" };
+			}
+
+			const apiKey = config.GEMINI_API_KEY;
+			if (!apiKey) {
+				set.status = 500;
+				return { success: false, error: "GEMINI_API_KEY not configured" };
+			}
+
+			const selectedModel = (
+				model && typeof model === "string" && model.trim().length > 0
+					? model.trim()
+					: "gemini-2.5-flash-image"
+			) as string;
+			const selectedModelId = selectedModel.replace(/^models\//, "");
+
+			let referenceImageClean: GoogleReferenceImage | undefined;
+			if (referenceImage && typeof referenceImage === "object") {
+				const mimeType = (referenceImage as any).mimeType;
+				const dataRaw = (referenceImage as any).data;
+				if (typeof mimeType !== "string" || !mimeType.startsWith("image/")) {
+					set.status = 400;
+					return { success: false, error: "Invalid referenceImage.mimeType" };
+				}
+				if (typeof dataRaw !== "string" || dataRaw.trim().length === 0) {
+					set.status = 400;
+					return { success: false, error: "Invalid referenceImage.data" };
+				}
+				const cleaned = dataRaw.includes(",") ? (dataRaw.split(",").pop() ?? "") : dataRaw;
+				referenceImageClean = {
+					mimeType,
+					data: cleaned.trim(),
+				};
+			}
+
+			try {
+				logger.info(
+					{ userId: locals.user._id, prompt, model: selectedModel },
+					"Generating image (Google)"
+				);
+
+				const requestParts: Array<any> = [{ text: prompt.trim() }];
+				if (referenceImageClean) {
+					requestParts.push({
+						inline_data: {
+							mime_type: referenceImageClean.mimeType,
+							data: referenceImageClean.data,
+						},
+					});
+				}
+
+				const res = await fetch(
+					`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+						selectedModelId
+					)}:generateContent`,
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							"x-goog-api-key": apiKey,
+						},
+						body: JSON.stringify({
+							contents: [
+								{
+									parts: requestParts,
+								},
+							],
+							generationConfig: {
+								responseModalities: ["TEXT", "IMAGE"],
+							},
+						}),
+					}
+				);
+
+				if (!res.ok) {
+					const text = await res.text().catch(() => "");
+					set.status = 502;
+					return {
+						success: false,
+						error: `Google image generation failed (${res.status}): ${text}`,
+					};
+				}
+
+				const json = (await res.json()) as {
+					candidates?: Array<{
+						content?: {
+							parts?: Array<{ text?: string; inlineData?: { data: string; mimeType?: string } }>;
+						};
+					}>;
+				};
+
+				const responseParts = json.candidates?.[0]?.content?.parts ?? [];
+				const imagePart = responseParts.find((p) => p.inlineData?.data);
+
+				if (!imagePart?.inlineData?.data) {
+					set.status = 502;
+					return {
+						success: false,
+						error: "Google image generation returned no image data",
+					};
+				}
+
+				const imageBuffer = Buffer.from(imagePart.inlineData.data, "base64");
+
+				const tags = ["google", "generated", locals.user._id.toString()];
+				const cloudinaryResult = await uploadImageToCloudinary(imageBuffer, {
+					folder: "chat-ui/generated-images",
+					tags,
+				});
+
+				const generatedImageId = new ObjectId();
+				const imageDoc = {
+					_id: generatedImageId,
+					userId: locals.user._id,
+					prompt: prompt.trim(),
+					cloudinaryUrl: cloudinaryResult.url,
+					cloudinaryPublicId: cloudinaryResult.publicId,
+					width: cloudinaryResult.width,
+					height: cloudinaryResult.height,
+					modelUsed: selectedModelId,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				};
+
+				await collections.generatedImages.insertOne(imageDoc);
+
+				return {
+					success: true,
+					image: {
+						_id: generatedImageId.toString(),
+						url: cloudinaryResult.url,
+						prompt: imageDoc.prompt,
+						modelUsed: imageDoc.modelUsed,
+						width: imageDoc.width,
+						height: imageDoc.height,
+						createdAt: imageDoc.createdAt,
+					},
+				};
+			} catch (error) {
+				logger.error({ error: String(error) }, "Google image generation failed");
+				set.status = 500;
+				return { success: false, error: "Failed to generate image: " + String(error) };
+			}
+		})
 		.post("/generate", async ({ locals, body, set }) => {
 			const { prompt, model } = body as { prompt: string; model?: string };
 
@@ -74,7 +291,7 @@ export const imageGroup = new Elysia().group("/images", (app) =>
 				});
 
 				// Save to MongoDB
-				let generatedImageId = new ObjectId();
+				const generatedImageId = new ObjectId();
 				const imageDoc = {
 					_id: generatedImageId,
 					userId: locals.user._id,

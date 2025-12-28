@@ -262,6 +262,7 @@ type CodeToken = {
 	lang: string;
 	code: string;
 	rawCode: string;
+	raw: string;
 	isClosed: boolean;
 };
 
@@ -292,6 +293,7 @@ export async function processTokens(content: string, sources: SimpleSource[]): P
 					lang: token.lang,
 					code: highlightCode(token.text, token.lang),
 					rawCode: token.text,
+					raw: token.raw ?? "",
 					isClosed: isFencedBlockClosed(token.raw ?? ""),
 				};
 			} else {
@@ -319,6 +321,7 @@ export function processTokensSync(content: string, sources: SimpleSource[]): Tok
 				lang: token.lang,
 				code: highlightCode(token.text, token.lang),
 				rawCode: token.text,
+				raw: token.raw ?? "",
 				isClosed: isFencedBlockClosed(token.raw ?? ""),
 			};
 		}

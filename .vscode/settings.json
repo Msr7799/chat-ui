@@ -20,5 +20,8 @@
 	},
 	"[xml]": {
 		"editor.defaultFormatter": "DotJoshJohnson.xml"
+	},
+	"[powershell]": {
+		"editor.defaultFormatter": "ms-vscode.powershell"
 	}
 }

@@ -25,3 +25,4 @@ auth-google.json
 vercel-env-variables.txt
 vercel-env.json
 .env.vercel
+mcp.local.config.json

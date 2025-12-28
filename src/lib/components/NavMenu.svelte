@@ -1,4 +1,4 @@
-<script lang="ts" module>
+<script lang="ts" context="module">
 	export const titles: { [key: string]: string } = {
 		today: "Today",
 		week: "This week",
@@ -14,7 +14,7 @@
 	import Logo from "$lib/components/icons/Logo.svelte";
 	import IconNew from "$lib/components/icons/IconNew.svelte";
 	import CarbonUser from "~icons/carbon/user";
-	import CarbonImage from "~icons/carbon/image";
+	import IconGoogle from "$lib/components/icons/IconGoogle.svelte";
 	import CarbonSettings from "~icons/carbon/settings";
 	import CarbonLogout from "~icons/carbon/logout";
 	import CarbonCube from "~icons/carbon/cube";
@@ -45,6 +45,7 @@
 	import { requireAuthUser } from "$lib/utils/auth";
 	import { enabledServersCount } from "$lib/stores/mcpServers";
 	import MCPServerManager from "./mcp/MCPServerManager.svelte";
+	import IconGoogleVideo from "./icons/IconGoogleVideo.svelte";
 
 	const publicConfig = usePublicConfig();
 	const client = useAPIClient();
@@ -134,6 +135,13 @@
 		} catch (error) {
 			console.error("Logout failed:", error);
 		}
+	}
+
+	function handleAvatarError(e: Event) {
+		const target = e.currentTarget as HTMLImageElement | null;
+		if (!target) return;
+		const name = user?.username || user?.email || "U";
+		target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff&size=128`;
 	}
 
 	const dateRanges = [
@@ -308,10 +316,7 @@
 							referrerpolicy="no-referrer"
 							class="size-full rounded-full object-cover"
 							alt={user.username || user.email}
-							onerror={(e) => {
-								const target = e.currentTarget as HTMLImageElement;
-								target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username || user.email || "U")}&background=6366f1&color=fff&size=128`;
-							}}
+							onerror={handleAvatarError}
 						/>
 					{:else}
 						<span class="text-lg font-semibold uppercase">
@@ -337,10 +342,7 @@
 											referrerpolicy="no-referrer"
 											class="size-full rounded-full object-cover"
 											alt={user.username || user.email}
-											onerror={(e) => {
-												const target = e.currentTarget as HTMLImageElement;
-												target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username || user.email || "U")}&background=6366f1&color=fff&size=128`;
-											}}
+											onerror={handleAvatarError}
 										/>
 									{:else}
 										<span class="text-xl font-semibold uppercase">
@@ -476,12 +478,21 @@
 	</a>
 
 	<a
-		href="{base}/gallery"
+		href="{base}/google-images"
 		class="flex h-9 flex-none items-center gap-1.5 rounded-lg pl-2.5 pr-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
 		onclick={handleNavItemClick}
 	>
-		<CarbonImage class="text-lg" />
-		<span>Gallery</span>
+		<IconGoogle classNames="text-lg" />
+		<span>Google Images</span>
+	</a>
+
+	<a
+		href="{base}/google-videos"
+		class="flex flex-none items-center gap-1 rounded-lg pl-2.5 pr-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+		onclick={handleNavItemClick}
+	>
+		<IconGoogleVideo classNames="text-lg" />
+		<span>Google Videos</span>
 	</a>
 
 	<a
@@ -509,7 +520,6 @@
 			{/if}
 		</button>
 	{/if}
-
 	<button
 		onclick={() => {
 			switchTheme();
@@ -525,9 +535,9 @@
 			{:else if themePreference === "stone"}
 				<CarbonFavorite class="text-red-400" />
 			{:else if themePreference === "red"}
-			<IconSun />
+				<IconSun />
 			{:else if themePreference === "indigo"}
-			<CarbonRainDrop class="text-zinc-950" />
+				<CarbonRainDrop class="text-zinc-950" />
 			{:else}
 				<IconMoon />
 			{/if}

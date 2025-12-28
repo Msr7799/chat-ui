@@ -129,6 +129,12 @@ export async function endpointOai(
 		fetch: customFetch,
 	});
 
+	const shouldUseUserTokenAuth = (locals: App.Locals | undefined) =>
+		config.USE_USER_TOKEN === "true" &&
+		Boolean(locals?.token) &&
+		Boolean(config.OPENAI_BASE_URL) &&
+		baseURL.replace(/\/$/, "") === config.OPENAI_BASE_URL.replace(/\/$/, "");
+
 	const imageProcessor = makeImageProcessor(multimodal.image);
 
 	if (completion === "completions") {
@@ -165,7 +171,7 @@ export async function endpointOai(
 					"ChatUI-Conversation-ID": conversationId?.toString() ?? "",
 					"X-use-cache": "false",
 					// ✅ فقط استخدم OAuth/user token إذا كان USE_USER_TOKEN مفعّل
-					...(config.USE_USER_TOKEN === "true" && locals?.token
+					...(shouldUseUserTokenAuth(locals) && locals?.token
 						? { Authorization: `Bearer ${locals.token}` }
 						: {}),
 					// Bill to organization if configured (HuggingChat only)
@@ -242,7 +248,7 @@ export async function endpointOai(
 							"ChatUI-Conversation-ID": conversationId?.toString() ?? "",
 							"X-use-cache": "false",
 							// ✅ فقط استخدم OAuth/user token إذا كان USE_USER_TOKEN مفعّل
-							...(config.USE_USER_TOKEN === "true" && locals?.token
+							...(shouldUseUserTokenAuth(locals) && locals?.token
 								? { Authorization: `Bearer ${locals.token}` }
 								: {}),
 							// Bill to organization if configured (HuggingChat only)
@@ -262,11 +268,9 @@ export async function endpointOai(
 						headers: {
 							"ChatUI-Conversation-ID": conversationId?.toString() ?? "",
 							"X-use-cache": "false",
-							// ✅ فقط استخدم OAuth/user token إذا كان USE_USER_TOKEN مفعّل
-							...(config.USE_USER_TOKEN === "true" && locals?.token
+							...(shouldUseUserTokenAuth(locals) && locals?.token
 								? { Authorization: `Bearer ${locals.token}` }
 								: {}),
-							// Bill to organization if configured (HuggingChat only)
 							...(config.isHuggingChat && locals?.billingOrganization
 								? { "X-HF-Bill-To": locals.billingOrganization }
 								: {}),

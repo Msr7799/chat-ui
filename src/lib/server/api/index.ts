@@ -5,6 +5,7 @@ import { misc } from "$api/routes/groups/misc";
 import { modelGroup } from "$api/routes/groups/models";
 import { debugGroup } from "$api/routes/groups/debug";
 import { imageGroup } from "$api/routes/groups/images";
+import { videoGroup } from "$api/routes/groups/videos";
 
 import { Elysia } from "elysia";
 import { base } from "$app/paths";
@@ -45,6 +46,7 @@ export const app = new Elysia({ prefix })
 	.use(modelGroup)
 	.use(misc)
 	.use(debugGroup)
-	.use(imageGroup);
+	.use(imageGroup)
+	.use(videoGroup);
 
 export type App = typeof app;

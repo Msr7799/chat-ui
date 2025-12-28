@@ -13,6 +13,7 @@ import type { MigrationResult } from "$lib/types/MigrationResult";
 import type { Semaphore } from "$lib/types/Semaphore";
 import type { AssistantStats } from "$lib/types/AssistantStats";
 import type { GeneratedImage } from "$lib/types/GeneratedImage";
+import type { GeneratedVideo } from "$lib/types/GeneratedVideo";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import { logger } from "$lib/server/logger";
 import { building } from "$app/environment";
@@ -135,6 +136,7 @@ export class Database {
 		const tools = db.collection("tools");
 		const configCollection = db.collection<ConfigKey>("config");
 		const generatedImages = db.collection<GeneratedImage>("generatedImages");
+		const generatedVideos = db.collection<GeneratedVideo>("generatedVideos");
 
 		return {
 			conversations,
@@ -155,6 +157,7 @@ export class Database {
 			tools,
 			config: configCollection,
 			generatedImages,
+			generatedVideos,
 		};
 	}
 
@@ -179,6 +182,7 @@ export class Database {
 			tokenCaches,
 			config,
 			generatedImages,
+			generatedVideos,
 		} = this.getCollections();
 
 		conversations
@@ -294,6 +298,7 @@ export class Database {
 		config.createIndex({ key: 1 }, { unique: true }).catch((e) => logger.error(e));
 
 		generatedImages.createIndex({ userId: 1, createdAt: -1 }).catch((e) => logger.error(e));
+		generatedVideos.createIndex({ userId: 1, createdAt: -1 }).catch((e) => logger.error(e));
 	}
 }
 

@@ -15,6 +15,7 @@
 	import { onMount } from "svelte";
 	import { browser } from "$app/environment";
 	import { getThemePreference, setTheme, type ThemePreference } from "$lib/switchTheme";
+	import IconKey from "$lib/components/icons/IconKey.svelte";
 
 	const publicConfig = usePublicConfig();
 	let settings = useSettingsStore();
@@ -65,6 +66,10 @@
 			// ignore if debug endpoint is unavailable
 		}
 
+		if (page.data.isAdmin) {
+			await loadConfigKeys();
+		}
+
 		// Fetch billing organizations (only for HuggingChat + logged in users)
 		if (publicConfig.isHuggingChat && page.data.user) {
 			billingOrgsLoading = true;
@@ -92,6 +97,64 @@
 	// Admin: model refresh UI state
 	let refreshing = $state(false);
 	let refreshMessage = $state<string | null>(null);
+
+	let configManagerEnabled = $state<boolean | null>(null);
+	let geminiApiKeySet = $state(false);
+	let hfTokenSet = $state(false);
+	let geminiApiKeyInput = $state("");
+	let hfTokenInput = $state("");
+	let showGeminiKey = $state(false);
+	let showHfToken = $state(false);
+	let isSavingKeys = $state(false);
+	let keysError = $state<string | null>(null);
+	let keysSaved = $state(false);
+
+	async function loadConfigKeys() {
+		keysError = null;
+		try {
+			const res = await fetch(`${base}/api/config`);
+			if (!res.ok) {
+				const t = await res.text().catch(() => "");
+				throw new Error(t || `HTTP ${res.status}`);
+			}
+			const data = (await res.json()) as {
+				configManagerEnabled: boolean;
+				geminiApiKeySet: boolean;
+				hfTokenSet: boolean;
+			};
+			configManagerEnabled = Boolean(data.configManagerEnabled);
+			geminiApiKeySet = Boolean(data.geminiApiKeySet);
+			hfTokenSet = Boolean(data.hfTokenSet);
+		} catch (e: any) {
+			keysError = String(e?.message ?? e);
+		}
+	}
+
+	async function saveConfigKeys(payload: { GEMINI_API_KEY?: string; HF_TOKEN?: string }) {
+		isSavingKeys = true;
+		keysError = null;
+		keysSaved = false;
+		try {
+			const res = await fetch(`${base}/api/config`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(payload),
+			});
+			if (!res.ok) {
+				const t = await res.text().catch(() => "");
+				throw new Error(t || `HTTP ${res.status}`);
+			}
+			const data = (await res.json()) as { geminiApiKeySet: boolean; hfTokenSet: boolean };
+			geminiApiKeySet = Boolean(data.geminiApiKeySet);
+			hfTokenSet = Boolean(data.hfTokenSet);
+			keysSaved = true;
+			setTimeout(() => (keysSaved = false), 2500);
+		} catch (e: any) {
+			keysError = String(e?.message ?? e);
+		} finally {
+			isSavingKeys = false;
+		}
+	}
 </script>
 
 <div class="flex w-full flex-col gap-4">
@@ -161,6 +224,142 @@
 		</div>
 	{/if}
 	<div class="flex h-full flex-col gap-4 max-sm:pt-0">
+		{#if page.data.isAdmin}
+			<div
+				class="rounded-xl border border-gray-200 bg-white px-3 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+			>
+				<div class="divide-y divide-gray-200 dark:divide-gray-700">
+					<div class="flex items-start justify-between py-3">
+						<div>
+							<div
+								class="flex items-center gap-2 text-[13px] font-medium text-gray-800 dark:text-gray-200"
+							>
+								<IconKey classNames="text-base" />
+								Google AI Studio API Key
+							</div>
+							<p class="text-[12px] text-gray-500 dark:text-gray-400">
+								Used for Google chat models + Google Images + Google Videos.
+							</p>
+							<a
+								href="https://aistudio.google.com/app/apikey"
+								target="_blank"
+								rel="noreferrer"
+								class="mt-1 inline-flex items-center text-[12px] underline decoration-gray-300 underline-offset-2 hover:decoration-gray-700 dark:decoration-gray-700 dark:hover:decoration-gray-400"
+							>
+								Create / Manage Google Studio API Key
+							</a>
+						</div>
+						<div class="flex w-[420px] max-w-full flex-col gap-2">
+							<div class="flex items-center gap-2">
+								<input
+									bind:value={geminiApiKeyInput}
+									type={showGeminiKey ? "text" : "password"}
+									placeholder={geminiApiKeySet ? "(configured)" : "AIza..."}
+									class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+									disabled={!configManagerEnabled || isSavingKeys}
+								/>
+								<button
+									type="button"
+									class="btn rounded-md text-xs"
+									onclick={() => (showGeminiKey = !showGeminiKey)}
+									disabled={isSavingKeys}
+								>
+									{showGeminiKey ? "Hide" : "Show"}
+								</button>
+							</div>
+							<div class="flex items-center justify-end gap-2">
+								<button
+									type="button"
+									class="btn rounded-md text-xs"
+									onclick={() => saveConfigKeys({ GEMINI_API_KEY: geminiApiKeyInput })}
+									disabled={!configManagerEnabled || isSavingKeys}
+								>
+									Save
+								</button>
+								<button
+									type="button"
+									class="btn rounded-md text-xs"
+									onclick={() => saveConfigKeys({ GEMINI_API_KEY: "" })}
+									disabled={!configManagerEnabled || isSavingKeys}
+								>
+									Clear
+								</button>
+							</div>
+						</div>
+					</div>
+
+					<div class="flex items-start justify-between py-3">
+						<div>
+							<div
+								class="flex items-center gap-2 text-[13px] font-medium text-gray-800 dark:text-gray-200"
+							>
+								<IconKey classNames="text-base" />
+								Hugging Face Token (HF_TOKEN)
+							</div>
+							<p class="text-[12px] text-gray-500 dark:text-gray-400">
+								Used for Hugging Face Router / OpenAI-compatible endpoints.
+							</p>
+							<a
+								href="https://huggingface.co/settings/tokens"
+								target="_blank"
+								rel="noreferrer"
+								class="mt-1 inline-flex items-center text-[12px] underline decoration-gray-300 underline-offset-2 hover:decoration-gray-700 dark:decoration-gray-700 dark:hover:decoration-gray-400"
+							>
+								Create / Manage Hugging Face Token
+							</a>
+						</div>
+						<div class="flex w-[420px] max-w-full flex-col gap-2">
+							<div class="flex items-center gap-2">
+								<input
+									bind:value={hfTokenInput}
+									type={showHfToken ? "text" : "password"}
+									placeholder={hfTokenSet ? "(configured)" : "hf_..."}
+									class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+									disabled={!configManagerEnabled || isSavingKeys}
+								/>
+								<button
+									type="button"
+									class="btn rounded-md text-xs"
+									onclick={() => (showHfToken = !showHfToken)}
+									disabled={isSavingKeys}
+								>
+									{showHfToken ? "Hide" : "Show"}
+								</button>
+							</div>
+							<div class="flex items-center justify-end gap-2">
+								<button
+									type="button"
+									class="btn rounded-md text-xs"
+									onclick={() => saveConfigKeys({ HF_TOKEN: hfTokenInput })}
+									disabled={!configManagerEnabled || isSavingKeys}
+								>
+									Save
+								</button>
+								<button
+									type="button"
+									class="btn rounded-md text-xs"
+									onclick={() => saveConfigKeys({ HF_TOKEN: "" })}
+									disabled={!configManagerEnabled || isSavingKeys}
+								>
+									Clear
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+				{#if configManagerEnabled === false}
+					<div class="px-3 pb-3 text-xs text-red-600 dark:text-red-400">
+						Config manager is disabled. Set <code>ENABLE_CONFIG_MANAGER=true</code> to store keys in DB.
+					</div>
+				{/if}
+				{#if keysError}
+					<div class="px-3 pb-3 text-xs text-red-600 dark:text-red-400">{keysError}</div>
+				{/if}
+				{#if keysSaved}
+					<div class="px-3 pb-3 text-xs text-green-600 dark:text-green-400">Saved</div>
+				{/if}
+			</div>
+		{/if}
 		<div
 			class="rounded-xl border border-gray-200 bg-white px-3 shadow-sm dark:border-gray-700 dark:bg-gray-800"
 		>

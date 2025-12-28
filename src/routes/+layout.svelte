@@ -31,6 +31,7 @@
 	import CarbonFavorite from "~icons/carbon/favorite";
 	import IconSun from "$lib/components/icons/IconSun.svelte";
 	import IconMoon from "$lib/components/icons/IconMoon.svelte";
+	import IconGoogle from "$lib/components/icons/IconGoogle.svelte";
 	import {
 		switchTheme,
 		subscribeToTheme,
@@ -43,6 +44,7 @@
 	import { browser } from "$app/environment";
 	import MCPServerManager from "$lib/components/mcp/MCPServerManager.svelte";
 	import IconChatBubble from "$lib/components/icons/IconChatBubble.svelte";
+	import CarbonPlay from "~icons/carbon/play";
 
 	let { data = $bindable(), children } = $props();
 
@@ -285,6 +287,7 @@
 	class="fixed grid h-full w-screen grid-cols-1 grid-rows-[auto,1fr] overflow-hidden text-smd {!isNavCollapsed
 		? 'md:grid-cols-[290px,1fr]'
 		: 'md:grid-cols-[0px,1fr]'} transition-[300ms] [transition-property:grid-template-columns] dark:text-gray-300 md:grid-rows-[1fr]"
+	data-nav-collapsed={isNavCollapsed}
 >
 	<ExpandNavigation
 		isCollapsed={isNavCollapsed}
@@ -383,6 +386,34 @@
 					title="Gallery"
 				>
 					<CarbonImage class="text-xl" />
+				</a>
+				<!-- زر Google Images في شريط الأيقونات عند طيّ الناف -->
+				<a
+					href="{base}/google-images"
+					onclick={(e) => {
+						if (requireAuthUser()) {
+							e.preventDefault();
+						}
+					}}
+					class="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-lg text-gray-300 hover:bg-white/10"
+					aria-label="Google Images"
+					title="Google Images"
+				>
+					<IconGoogle classNames="text-xl" />
+				</a>
+				<!-- زر Google Videos في شريط الأيقونات عند طيّ الناف -->
+				<a
+					href="{base}/google-videos"
+					onclick={(e) => {
+						if (requireAuthUser()) {
+							e.preventDefault();
+						}
+					}}
+					class="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-lg text-gray-300 hover:bg-white/10"
+					aria-label="Google Videos"
+					title="Google Videos"
+				>
+					<CarbonPlay class="text-xl" />
 				</a>
 				<!-- زر MCP مباشرة بعد Gallery -->
 				<button

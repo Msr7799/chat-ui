@@ -11,11 +11,12 @@
 		content: string;
 		sources?: { title?: string; link: string }[];
 		loading?: boolean;
+		onEditCode?: (payload: { originalFenced: string; nextFenced: string }) => void;
 	}
 
-	let { content, sources = [], loading = false }: Props = $props();
+	let { content, sources = [], loading = false, onEditCode }: Props = $props();
 
-	let blocks: BlockToken[] = $state(processBlocksSync(content, sources));
+	let blocks: BlockToken[] = $state([]);
 	let worker: Worker | null = null;
 	let latestRequestId = 0;
 
@@ -65,5 +66,5 @@
 </script>
 
 {#each blocks as block, index (loading && index === blocks.length - 1 ? `stream-${index}` : block.id)}
-	<MarkdownBlock tokens={block.tokens} {loading} />
+	<MarkdownBlock tokens={block.tokens} {loading} {onEditCode} />
 {/each}

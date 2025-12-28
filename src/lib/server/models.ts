@@ -367,6 +367,103 @@ const buildModels = async (): Promise<ProcessedModel[]> => {
 			} as ModelConfig;
 		}) as ModelConfig[];
 
+		const googleApiKey = (config.GEMINI_API_KEY || "").trim();
+		if (googleApiKey) {
+			const googleBaseURL = "https://generativelanguage.googleapis.com/v1beta/openai";
+			const googleListSchema = z
+				.object({
+					data: z
+						.array(
+							z
+								.object({
+									id: z.string(),
+									description: z.string().optional(),
+									created: z.number().optional(),
+								})
+								.passthrough()
+						)
+						.optional(),
+				})
+				.passthrough();
+
+			const toGoogleDisplayName = (id: string) => {
+				const cleaned = id
+					.replace(/^models\//, "")
+					.replace(/[:]/g, " ")
+					.replace(/_/g, "-");
+				return cleaned.replace(/\s+/g, " ").replace(/-/g, " ").trim() || id;
+			};
+
+			try {
+				const responseGoogle = await fetch(`${googleBaseURL}/models`, {
+					headers: {
+						Authorization: `Bearer ${googleApiKey}`,
+						"x-goog-api-key": googleApiKey,
+					},
+				});
+				if (!responseGoogle.ok) {
+					const text = await responseGoogle.text().catch(() => "");
+					throw new Error(
+						`Failed to fetch Google models: ${responseGoogle.status} ${responseGoogle.statusText} ${text}`
+					);
+				}
+				const jsonGoogle = await responseGoogle.json();
+				const parsedGoogle = googleListSchema.parse(jsonGoogle);
+				const googleModels = (parsedGoogle.data ?? [])
+					.filter((m) => typeof m.id === "string" && m.id.toLowerCase().includes("gemini"))
+					.filter((m) => !m.id.toLowerCase().includes("image"))
+					.sort((a, b) => (b.created ?? 0) - (a.created ?? 0));
+
+				const existingIds = new Set(modelsRaw.map((m) => m.id ?? m.name));
+				const googleModelsRaw = googleModels
+					.filter((m) => !existingIds.has(m.id))
+					.map(
+						(m) =>
+							({
+								id: m.id,
+								name: m.id,
+								displayName: toGoogleDisplayName(m.id),
+								description: m.description || "Google Gemini (OpenAI-compatible)",
+								logoUrl: "/google_studio_page/google.svg",
+								preprompt: "",
+								supportsTools: false,
+								unlisted: false,
+								systemRoleSupported: true,
+								endpoints: [
+									{
+										type: "openai" as const,
+										weight: 1,
+										baseURL: googleBaseURL,
+										apiKey: googleApiKey,
+										completion: "chat_completions" as const,
+										defaultHeaders: {
+											"x-goog-api-key": googleApiKey,
+										},
+										multimodal: {
+											image: {
+												supportedMimeTypes: ["image/png", "image/jpeg"],
+												preferredMimeType: "image/jpeg",
+												maxSizeInMB: 1,
+												maxWidth: 1024,
+												maxHeight: 1024,
+											},
+										},
+										useCompletionTokens: false,
+										streamingSupported: true,
+									},
+								],
+								multimodal: true,
+								multimodalAcceptedMimetypes: ["image/*"],
+							}) satisfies ModelConfig
+					);
+
+				modelsRaw = [...googleModelsRaw, ...modelsRaw];
+				logger.info({ count: googleModelsRaw.length }, "[models] Added Google models");
+			} catch (e) {
+				logger.error(e, "[models] Failed to load Google models");
+			}
+		}
+
 		const overrides = getModelOverrides();
 
 		if (overrides.length) {
