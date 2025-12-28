@@ -3,14 +3,15 @@ import Icons from "unplugin-icons/vite";
 import { promises } from "fs";
 import { defineConfig } from "vitest/config";
 import { config } from "dotenv";
+import type { Plugin } from "vite";
 
 config({ path: "./.env.local" });
 
 // used to load fonts server side for thumbnail generation
-function loadTTFAsArrayBuffer() {
+function loadTTFAsArrayBuffer(): Plugin {
 	return {
 		name: "load-ttf-as-array-buffer",
-		async transform(_src, id) {
+		async transform(_src: string, id: string) {
 			if (id.endsWith(".ttf")) {
 				return `export default new Uint8Array([
 			${new Uint8Array(await promises.readFile(id))}
