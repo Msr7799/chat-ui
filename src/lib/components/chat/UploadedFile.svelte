@@ -71,14 +71,14 @@
 				<img
 					src={urlNotTrailing + "/output/" + file.value}
 					alt="input from user"
-					class="aspect-auto"
+					class="mx-auto max-h-[90dvh] max-w-[90dvw] object-contain"
 				/>
 			{:else}
 				<!-- handle the case where this is a base64 encoded image -->
 				<img
 					src={`data:${file.mime};base64,${file.value}`}
 					alt="input from user"
-					class="aspect-auto"
+					class="mx-auto max-h-[90dvh] max-w-[90dvw] object-contain"
 				/>
 			{/if}
 		{:else if isPlainText(file.mime)}
