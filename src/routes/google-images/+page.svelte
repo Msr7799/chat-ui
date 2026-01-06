@@ -626,7 +626,7 @@
 												/>
 											</button>
 											<div
-												class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-0 transition-opacity group-hover:opacity-100"
+												class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-0 transition-opacity group-hover:opacity-100"
 											>
 												<div class="absolute bottom-0 left-0 right-0 p-4">
 													<p class="line-clamp-3 text-sm font-medium text-white">{img.prompt}</p>

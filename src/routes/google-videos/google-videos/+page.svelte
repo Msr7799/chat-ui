@@ -61,7 +61,7 @@
 	let isLoadingRecent = $state(false);
 	let recentError = $state<string | null>(null);
 	let lastGenerated = $state<GeneratedVideo | null>(null);
-	let allowAdult = $state(false);
+	let allowAdult = $state(true);
 
 	let copyStatus = $state<string | null>(null);
 	let selectedVideoForPreview = $state<GeneratedVideo | null>(null);
