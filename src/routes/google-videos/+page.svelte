@@ -111,6 +111,56 @@
 		}
 	}
 
+	async function compressImage(file: File): Promise<{ data: string; mimeType: string }> {
+		return new Promise((resolve, reject) => {
+			const img = new Image();
+			const reader = new FileReader();
+
+			reader.onload = (e) => {
+				img.src = e.target?.result as string;
+			};
+			reader.onerror = (e) => reject(e);
+
+			img.onload = () => {
+				const canvas = document.createElement("canvas");
+				let width = img.width;
+				let height = img.height;
+				const MAX_SIZE = 1280;
+
+				if (width > height) {
+					if (width > MAX_SIZE) {
+						height *= MAX_SIZE / width;
+						width = MAX_SIZE;
+					}
+				} else {
+					if (height > MAX_SIZE) {
+						width *= MAX_SIZE / height;
+						height = MAX_SIZE;
+					}
+				}
+
+				canvas.width = width;
+				canvas.height = height;
+
+				const ctx = canvas.getContext("2d");
+				if (!ctx) {
+					reject(new Error("Could not get canvas context"));
+					return;
+				}
+
+				ctx.drawImage(img, 0, 0, width, height);
+
+				const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+				resolve({
+					data: dataUrl,
+					mimeType: "image/jpeg",
+				});
+			};
+
+			reader.readAsDataURL(file);
+		});
+	}
+
 	async function setReferenceFromFile(file: File) {
 		if (!file.type.startsWith("image/")) {
 			generateError = "Please select an image file";
@@ -120,14 +170,18 @@
 		if (referencePreviewUrl) {
 			URL.revokeObjectURL(referencePreviewUrl);
 		}
+
+		// Use original file for preview to be fast
 		referencePreviewUrl = URL.createObjectURL(file);
-		const dataUrl = await new Promise<string>((resolve, reject) => {
-			const reader = new FileReader();
-			reader.onload = () => resolve(String(reader.result || ""));
-			reader.onerror = () => reject(reader.error);
-			reader.readAsDataURL(file);
-		});
-		referenceImage = { data: dataUrl, mimeType: file.type };
+
+		try {
+			// Compress for upload
+			const compressed = await compressImage(file);
+			referenceImage = { data: compressed.data, mimeType: compressed.mimeType };
+		} catch (e) {
+			console.error("Image compression failed", e);
+			generateError = "Failed to process image";
+		}
 	}
 
 	function clearReferenceImage() {
@@ -533,7 +587,7 @@
 								class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-900"
 								disabled={isGenerating}
 							/>
-							<label for="allow-adult" class="text-xs font-medium text-gray-300 select-none">
+							<label for="allow-adult" class="select-none text-xs font-medium text-gray-300">
 								Allow Adult Content (Warning: May generate NSFW content)
 							</label>
 						</div>
@@ -646,7 +700,7 @@
 			<!-- Video Preview Modal -->
 			{#if selectedVideoForPreview}
 				<div
-					class="fixed inset-0 z-50 relative flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm"
+					class="fixed relative inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm"
 					role="dialog"
 					aria-modal="true"
 					aria-labelledby="preview-title"
@@ -722,8 +776,7 @@
 				</div>
 			{/if}
 
-			
-<!-- Videos Gallery -->
+			<!-- Videos Gallery -->
 			<div class="space-y-6">
 				<div class="flex items-center justify-between">
 					<h2 class="flex items-center gap-2 text-2xl font-bold text-white">📚 Generated Videos</h2>
@@ -822,7 +875,7 @@
 
 {#if isGoogleKeyOpen}
 	<div
-		class="fixed inset-0 z-[10000] relative flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+		class="fixed relative inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby="google-key-title"
@@ -846,7 +899,9 @@
 			<div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
 				<div class="flex items-center gap-2">
 					<IconKey classNames="h-5 w-5 text-blue-400" />
-					<p class="text-sm font-semibold text-white" id="google-key-title">Google Studio API Key</p>
+					<p class="text-sm font-semibold text-white" id="google-key-title">
+						Google Studio API Key
+					</p>
 				</div>
 				<button
 					type="button"
