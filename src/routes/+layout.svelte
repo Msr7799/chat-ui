@@ -122,9 +122,7 @@
 			.patch({ title })
 			.then(handleResponse)
 			.then(async () => {
-				conversations = conversations.map((conv: { id: string; title: string }) =>
-					conv.id === id ? { ...conv, title } : conv
-				);
+				conversations = conversations.map((conv) => (conv.id === id ? { ...conv, title } : conv));
 			})
 			.catch((err) => {
 				console.error(err);

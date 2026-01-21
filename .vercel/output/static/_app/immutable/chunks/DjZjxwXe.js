@@ -1,0 +1,1 @@
+import{w as r}from"./C8st8IW6.js";import{g as t}from"./jB7C_rnE.js";const s=r(null),o=t([]);function c(n){const i=o.findIndex(({id:e})=>e===n.id);if(i===-1){o.push(n);return}o[i]=n}function u(n){const i=o.findIndex(e=>e.id===n);i!==-1&&o.splice(i,1)}export{c as a,o as b,u as r,s as t};

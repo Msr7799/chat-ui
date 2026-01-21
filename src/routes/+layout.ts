@@ -21,6 +21,10 @@ export const load = async ({ depends, fetch, url }) => {
 
 	const defaultModel = models[0];
 
+	if ("error" in conversationsData) {
+		throw new Error(conversationsData.error);
+	}
+
 	const { conversations: rawConversations } = conversationsData;
 	const conversations = rawConversations.map((conv) => {
 		const trimmedTitle = conv.title.trim();

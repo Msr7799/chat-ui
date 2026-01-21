@@ -557,8 +557,50 @@ const buildModels = async (): Promise<ProcessedModel[]> => {
 
 		return decorated;
 	} catch (e) {
-		logger.error(e, "Failed to load models from OpenAI base URL");
-		throw e;
+		logger.error(
+			e,
+			"Failed to load models from OpenAI base URL. Using fallback model to prevent build failure."
+		);
+
+		// Fallback model to allow build to proceed even if API is unreachable
+		const fallbackRaw = {
+			id: "deployment-fallback",
+			name: "deployment-fallback",
+			displayName: "Setup Required",
+			description:
+				"The model provider could not be reached during build. Please check your API keys and restart.",
+			websiteUrl: "https://huggingface.co",
+			preprompt: "",
+			chatPromptTemplate: undefined,
+			promptExamples: [],
+			endpoints: [
+				{
+					type: "openai" as const,
+					baseURL: "https://api.openai.com/v1",
+					weight: 1,
+				},
+			],
+			parameters: {},
+			multimodal: false,
+			supportsTools: false,
+			unlisted: false,
+			systemRoleSupported: true,
+		} as unknown as ModelConfig;
+
+		try {
+			const processed = await processModel(fallbackRaw);
+			const endpointed = addEndpoint(processed);
+			return [
+				{
+					...endpointed,
+					isRouter: false,
+					hasInferenceAPI: false,
+				},
+			];
+		} catch (innerErr) {
+			logger.error(innerErr, "Failed to create fallback model");
+			throw e;
+		}
 	}
 };
 

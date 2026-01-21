@@ -554,6 +554,10 @@
 				class="flex items-center underline decoration-red-200 underline-offset-2 hover:decoration-red-500 dark:decoration-red-900 dark:hover:decoration-red-700"
 				><CarbonTrashCan class="mr-2 inline text-sm text-red-500" />Delete all conversations</button
 			>
+			<div class="relative bottom-0 mt-24 text-lg font-semibold text-gray-400/80 dark:text-gray-500/80">
+			 Rights reserved © 2026
+				develope by Mohamed S. Alromaihi
+			</div>
 		</div>
 	</div>
 </div>

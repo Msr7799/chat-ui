@@ -61,6 +61,7 @@
 	let isLoadingRecent = $state(false);
 	let recentError = $state<string | null>(null);
 	let lastGenerated = $state<GeneratedVideo | null>(null);
+	let allowAdult = $state(false);
 
 	let copyStatus = $state<string | null>(null);
 	let selectedVideoForPreview = $state<GeneratedVideo | null>(null);
@@ -324,6 +325,7 @@
 				aspectRatio: selectedAspectRatio,
 				resolution: selectedResolution,
 				referenceImage: mode === "image-to-video" ? (referenceImage ?? undefined) : undefined,
+				allowAdult: mode === "image-to-video" ? allowAdult : undefined,
 			});
 			const data = handleResponse(res) as {
 				success: boolean;
@@ -522,6 +524,21 @@
 						</div>
 					{/if}
 
+					{#if mode === "image-to-video"}
+						<div class="flex items-center gap-2 py-2">
+							<input
+								type="checkbox"
+								id="allow-adult"
+								bind:checked={allowAdult}
+								class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-900"
+								disabled={isGenerating}
+							/>
+							<label for="allow-adult" class="select-none text-xs font-medium text-gray-300">
+								Allow Adult Content (Warning: May generate NSFW content)
+							</label>
+						</div>
+					{/if}
+
 					<div class="min-w-0 flex-1 space-y-3">
 						<div class="flex items-center gap-2">
 							<div class="relative min-w-0 flex-1" bind:this={promptHistoryRoot}>
@@ -629,7 +646,7 @@
 			<!-- Video Preview Modal -->
 			{#if selectedVideoForPreview}
 				<div
-					class="fixed inset-0 z-50 relative flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm"
+					class="fixed relative inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm"
 					role="dialog"
 					aria-modal="true"
 					aria-labelledby="preview-title"
@@ -645,6 +662,8 @@
 						tabindex="-1"
 						onclick={() => (selectedVideoForPreview = null)}
 					></button>
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 					<div
 						class="relative z-10 w-full max-w-5xl overflow-hidden rounded-2xl bg-gray-900 shadow-2xl"
 						role="document"
@@ -705,8 +724,7 @@
 				</div>
 			{/if}
 
-			
-<!-- Videos Gallery -->
+			<!-- Videos Gallery -->
 			<div class="space-y-6">
 				<div class="flex items-center justify-between">
 					<h2 class="flex items-center gap-2 text-2xl font-bold text-white">📚 Generated Videos</h2>
@@ -805,7 +823,7 @@
 
 {#if isGoogleKeyOpen}
 	<div
-		class="fixed inset-0 z-[10000] relative flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+		class="fixed relative inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby="google-key-title"
@@ -821,6 +839,8 @@
 			tabindex="-1"
 			onclick={() => (isGoogleKeyOpen = false)}
 		></button>
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<div
 			class="relative z-10 w-full max-w-xl overflow-hidden rounded-2xl border border-white/10 bg-gray-900 shadow-2xl"
 			onclick={(e) => e.stopPropagation()}
@@ -829,7 +849,9 @@
 			<div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
 				<div class="flex items-center gap-2">
 					<IconKey classNames="h-5 w-5 text-blue-400" />
-					<p class="text-sm font-semibold text-white" id="google-key-title">Google Studio API Key</p>
+					<p class="text-sm font-semibold text-white" id="google-key-title">
+						Google Studio API Key
+					</p>
 				</div>
 				<button
 					type="button"

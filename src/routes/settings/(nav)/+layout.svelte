@@ -245,6 +245,10 @@
 					Application Settings
 				</button>
 			</div>
+			
+			<div class="mt-auto px-3 py-3 text-xs font-semibold text-gray-400/80 dark:text-gray-500/80">
+				Mohamed S. Alromaihi
+			</div>
 		</div>
 	{/if}
 	{#if showContent}

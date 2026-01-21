@@ -577,7 +577,7 @@
 									{#each starterImages as img (img.url)}
 										<button
 											type="button"
-											class="group relative h-80 w-80 flex-shrink-0 overflow-hidden rounded-2xl border-2 border-white/10 transition-all hover:scale-105 hover:border-purple-500 hover:shadow-2xl hover:shadow-purple-500/30"
+											class="group relative h-80 w-80 flex-shrink-0 cursor-pointer overflow-hidden rounded-2xl border-2 border-white/10 transition-all hover:scale-105 hover:border-purple-500 hover:shadow-2xl hover:shadow-purple-500/30"
 											onclick={() =>
 												(lightboxImage = {
 													_id: img.url,
@@ -615,7 +615,7 @@
 										>
 											<button
 												type="button"
-												class="h-full w-full"
+												class="h-full w-full cursor-pointer"
 												onclick={() => (lightboxImage = img)}
 											>
 												<img
@@ -626,7 +626,7 @@
 												/>
 											</button>
 											<div
-												class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-0 transition-opacity group-hover:opacity-100"
+												class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-0 transition-opacity group-hover:opacity-100"
 											>
 												<div class="absolute bottom-0 left-0 right-0 p-4">
 													<p class="line-clamp-3 text-sm font-medium text-white">{img.prompt}</p>
@@ -907,11 +907,21 @@
 			{#if isGoogleKeyOpen}
 				<div
 					class="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+					role="button"
+					tabindex="0"
+					onkeydown={(e) => {
+						if (e.key === "Escape") isGoogleKeyOpen = false;
+					}}
 					onclick={() => (isGoogleKeyOpen = false)}
 				>
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 					<div
 						class="w-full max-w-xl overflow-hidden rounded-2xl border border-white/10 bg-gray-900 shadow-2xl"
+						role="document"
 						onclick={(e) => e.stopPropagation()}
+						onkeydown={(e) => e.stopPropagation()}
+						tabindex="-1"
 					>
 						<div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
 							<div class="flex items-center gap-2">
@@ -990,9 +1000,14 @@
 					aria-modal="true"
 					tabindex="-1"
 				>
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 					<div
 						class="relative w-full max-w-6xl overflow-hidden rounded-2xl bg-gray-900 shadow-2xl"
+						role="document"
 						onclick={(e) => e.stopPropagation()}
+						onkeydown={(e) => e.stopPropagation()}
+						tabindex="-1"
 					>
 						<div
 							class="flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-gray-900 to-gray-800 px-6 py-4"

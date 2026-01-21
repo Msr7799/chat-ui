@@ -4,6 +4,8 @@
 	import { base } from "$app/paths";
 	import type { Model } from "$lib/types/Model";
 
+	import { untrack } from "svelte";
+
 	interface Props {
 		models: Model[];
 		currentModel: Model;
@@ -11,10 +13,23 @@
 
 	let { models, currentModel }: Props = $props();
 
-	// Plain component state is enough here; no need for $state
-	let selectedModelId: Model["id"] = models.map((m) => m.id).includes(currentModel.id)
-		? currentModel.id
-		: models[0].id;
+	// Use untrack during initialization to avoid "state referenced locally" warning
+	// since we only want the initial value here, and updates are handled by the effect.
+	let selectedModelId = $state(
+		untrack(() =>
+			models.map((m) => m.id).includes(currentModel.id) ? currentModel.id : models[0].id
+		)
+	);
+
+	$effect(() => {
+		if (models.map((m) => m.id).includes(currentModel.id)) {
+			// Untrack assignment if needed, though usually assignment to a state is fine.
+			// But the warning might come from reading dependencies inside the effect without tracking them?
+			// Actually the warning is about 'local state' (let selectedModelId).
+			// The warnings we saw were on the initialization lines.
+			selectedModelId = currentModel.id;
+		}
+	});
 
 	async function handleModelChange() {
 		if (!page.params.id) return;

@@ -1,0 +1,1 @@
+import{w as e}from"./C8st8IW6.js";const a={default:"Oops, something went wrong.",authOnly:"You have to be logged in.",rateLimited:"You are sending too many messages. Try again later."},t=e(void 0);export{a as E,t as e};

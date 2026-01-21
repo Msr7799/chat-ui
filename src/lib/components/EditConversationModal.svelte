@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Modal from "$lib/components/Modal.svelte";
-	import { onMount } from "svelte";
+	import { onMount, untrack } from "svelte";
 
 	interface Props {
 		open?: boolean;
@@ -11,13 +11,15 @@
 
 	let { open = false, title = "", onclose, onsave }: Props = $props();
 
-	let newTitle = $state(title);
+	let newTitle = $state(untrack(() => title));
 	let inputEl: HTMLInputElement | undefined = $state();
 
 	$effect(() => {
 		// keep local input in sync if parent changes title while open
 		if (open) {
-			newTitle = title;
+			untrack(() => {
+				newTitle = title;
+			});
 		}
 	});
 

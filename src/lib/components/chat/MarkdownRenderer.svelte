@@ -3,6 +3,7 @@
 	import MarkdownWorker from "$lib/workers/markdownWorker?worker";
 	import MarkdownBlock from "./MarkdownBlock.svelte";
 	import { browser } from "$app/environment";
+	import Modal from "../Modal.svelte";
 
 	import { onMount, onDestroy } from "svelte";
 	import { updateDebouncer } from "$lib/utils/updates";
@@ -19,6 +20,24 @@
 	let blocks: BlockToken[] = $state([]);
 	let worker: Worker | null = null;
 	let latestRequestId = 0;
+
+	let showImageModal = $state(false);
+	let modalImageSrc: string | null = $state(null);
+	let modalImageAlt = $state("");
+
+	function handleContainerClick(event: MouseEvent | KeyboardEvent) {
+		const target = event.target as HTMLElement | null;
+		const img = target?.closest?.("img") as HTMLImageElement | null;
+		if (!img) return;
+
+		// When an image is inside a link, prevent navigation and show the preview instead.
+		event.preventDefault();
+		event.stopPropagation();
+
+		modalImageSrc = img.currentSrc || img.src;
+		modalImageAlt = img.alt ?? "";
+		showImageModal = true;
+	}
 
 	function handleBlocks(result: BlockToken[], requestId: number) {
 		if (requestId !== latestRequestId) return;
@@ -65,6 +84,25 @@
 	});
 </script>
 
-{#each blocks as block, index (loading && index === blocks.length - 1 ? `stream-${index}` : block.id)}
-	<MarkdownBlock tokens={block.tokens} {loading} {onEditCode} />
-{/each}
+{#if showImageModal && modalImageSrc}
+	<Modal width="xl:max-w-[90dvw]" onclose={() => (showImageModal = false)}>
+		<img
+			src={modalImageSrc}
+			alt={modalImageAlt}
+			class="mx-auto max-h-[90dvh] max-w-[90dvw] object-contain"
+		/>
+	</Modal>
+{/if}
+
+<div
+	role="button"
+	tabindex="0"
+	onkeydown={(e) => {
+		if (e.key === "Enter" || e.key === " ") handleContainerClick(e);
+	}}
+	onclick={handleContainerClick}
+>
+	{#each blocks as block, index (loading && index === blocks.length - 1 ? `stream-${index}` : block.id)}
+		<MarkdownBlock tokens={block.tokens} {loading} {onEditCode} />
+	{/each}
+</div>
