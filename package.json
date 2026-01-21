@@ -40,7 +40,7 @@
 		"@types/yazl": "^3.3.0",
 		"@typescript-eslint/eslint-plugin": "^6.x",
 		"@typescript-eslint/parser": "^6.x",
-		"@vitest/browser": "^4.0.17",
+		"@vitest/browser": "^3.2.4",
 		"bson-objectid": "^2.0.4",
 		"dompurify": "^3.2.4",
 		"elysia": "^1.4.18",
