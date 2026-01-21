@@ -104,7 +104,7 @@
 			.delete()
 			.then(handleResponse)
 			.then(async () => {
-				conversations = conversations.filter((conv: { id: string }) => conv.id !== id);
+				conversations = conversations.filter((conv) => conv.id !== id);
 
 				if (page.params.id === id) {
 					await goto(`${base}/`, { invalidateAll: true });
@@ -122,9 +122,7 @@
 			.patch({ title })
 			.then(handleResponse)
 			.then(async () => {
-				conversations = conversations.map((conv: { id: string; title: string }) =>
-					conv.id === id ? { ...conv, title } : conv
-				);
+				conversations = conversations.map((conv) => (conv.id === id ? { ...conv, title } : conv));
 			})
 			.catch((err) => {
 				console.error(err);
