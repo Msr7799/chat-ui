@@ -104,7 +104,7 @@
 			.delete()
 			.then(handleResponse)
 			.then(async () => {
-				conversations = conversations.filter((conv: { id: string }) => conv.id !== id);
+				conversations = conversations.filter((conv) => conv.id !== id);
 
 				if (page.params.id === id) {
 					await goto(`${base}/`, { invalidateAll: true });
